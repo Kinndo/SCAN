@@ -32,6 +32,22 @@ reads private keys, seed phrases, wallet passwords or signing credentials — th
 wallet code in it at all, and `npm run check` fails the build if any is introduced.
 Everything (settings, cache, last scan) stays in `browser.storage.local` on your machine.
 
+Permissions it asks for: `tabs` (to see the active tab's URL so the sidebar can follow
+you between coins), `activeTab` + `scripting` (to read the page you pressed SCAN on), and
+`storage`. Reading any other page requires you to approve that site explicitly.
+
+## Keep it open: sidebar mode
+
+The popup closes the moment you click the page. For a panel that stays put, open SCAN in
+the Firefox **sidebar**: press **Alt+Shift+S**, click **Sidebar** in the popup, or use
+View › Sidebar › SCAN. The sidebar follows the active tab — switch to another coin and it
+re-detects and rescans on its own (toggle that in Settings) — and Firefox reopens it after
+a restart.
+
+Reading a page for the token's *name* needs a one-time permission per site; the panel
+offers an **Allow** button when that is the case. Token detection from the URL, and every
+score, work without it.
+
 ## Install for development
 
 ```bash

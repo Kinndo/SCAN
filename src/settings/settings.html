@@ -30,6 +30,23 @@
     </section>
 
     <section class="panel">
+      <h2>Sidebar</h2>
+      <p class="hint">
+        Keep SCAN open beside the page: press <strong>Alt+Shift+S</strong>, use the <strong>Sidebar</strong>
+        button in the popup, or Firefox's View &rsaquo; Sidebar &rsaquo; SCAN. The sidebar follows the active
+        tab and Firefox reopens it after a restart.
+      </p>
+      <label class="check-row">
+        <input id="autoScanInSidebar" type="checkbox" />
+        Scan automatically when the active tab changes to a different token
+      </label>
+      <p class="hint">
+        Reading a page for the token's name needs a one-time permission per site, which the panel asks for
+        when it is needed. Token detection from the URL works without it.
+      </p>
+    </section>
+
+    <section class="panel">
       <h2>Thresholds</h2>
       <div class="grid2">
         <label>Minimum liquidity (USD)<input id="minLiquidityUsd" class="input" type="number" min="0" step="1000" /></label>

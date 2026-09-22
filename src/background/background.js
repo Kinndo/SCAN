@@ -39,13 +39,33 @@ const CONTENT_FILES = [
   'src/content/content.js',
 ];
 
-async function getActiveTab() {
-  const tabs = await ext.tabs.query({ active: true, currentWindow: true });
+async function getActiveTab(windowId) {
+  // A sidebar or popup passes its own window so a scan follows the tab the user
+  // is actually looking at, not whichever window last had focus.
+  const query = windowId != null ? { active: true, windowId } : { active: true, currentWindow: true };
+  const tabs = await ext.tabs.query(query);
   return tabs && tabs[0] ? tabs[0] : null;
 }
 
-export async function detectToken() {
-  const tab = await getActiveTab();
+/**
+ * Reading a page needs either activeTab (granted only by clicking the toolbar
+ * button) or a host permission for that site. The sidebar has neither by
+ * default, so when injection fails we report which origin to ask for.
+ */
+async function missingHostPermission(url) {
+  try {
+    const u = new URL(url);
+    if (!/^https?:$/.test(u.protocol)) return null;
+    const origin = `${u.protocol}//${u.hostname}/*`;
+    const has = await ext.permissions.contains({ origins: [origin] });
+    return has ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
+export async function detectToken(windowId = null) {
+  const tab = await getActiveTab(windowId);
   if (!tab || !tab.url) {
     return { ok: false, reason: 'no-tab', message: 'No active tab to read.' };
   }
@@ -56,12 +76,14 @@ export async function detectToken() {
     // The URL gives us the address but never the token's name. Read the page
     // for that too - this runs while the user is still looking at the idle
     // screen, before they press SCAN, so it costs them nothing.
-    const page = await readPage(tab.id);
+    const { result: page, failed } = await readPage(tab.id);
+    const needsHostPermission = failed && !restrictedPage(tab.url) ? await missingHostPermission(tab.url) : null;
     return {
       ok: true,
       ...fromUrl,
       identityHints: page && page.identityHints ? page.identityHints : null,
       pageDebug: page && page.debug ? page.debug : null,
+      needsHostPermission,
       tabUrl: tab.url,
       hostname: safeHostname(tab.url),
     };
@@ -74,12 +96,17 @@ export async function detectToken() {
     const injected = await ext.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_FILES });
     pageResult = injected && injected[0] ? injected[0].result : null;
   } catch (err) {
+    const restricted = restrictedPage(tab.url);
+    const needsHostPermission = restricted ? null : await missingHostPermission(tab.url);
     return {
       ok: false,
       reason: 'injection-failed',
-      message: restrictedPage(tab.url)
+      message: restricted
         ? 'This page cannot be read by extensions. Paste the contract address instead.'
-        : `Unable to read this page: ${String((err && err.message) || err)}`,
+        : needsHostPermission
+          ? 'SCAN does not have permission to read this site yet.'
+          : `Unable to read this page: ${String((err && err.message) || err)}`,
+      needsHostPermission,
       hostname: safeHostname(tab.url),
       tabUrl: tab.url,
     };
@@ -123,9 +150,9 @@ export async function detectToken() {
 async function readPage(tabId) {
   try {
     const injected = await ext.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
-    return injected && injected[0] ? injected[0].result : null;
+    return { result: injected && injected[0] ? injected[0].result : null, failed: false };
   } catch {
-    return null;
+    return { result: null, failed: true };
   }
 }
 
@@ -228,7 +255,7 @@ ext.runtime.onConnect.addListener((port) => {
 ext.runtime.onMessage.addListener((message) => {
   switch (message && message.type) {
     case 'DETECT':
-      return detectToken();
+      return detectToken(message.windowId ?? null);
     case 'SCAN':
       return startScan(message.target);
     case 'GET_STATE':

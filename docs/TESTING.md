@@ -85,6 +85,20 @@ one into the popup's manual-entry box to reach that UI state deliberately:
    finished result should be there instantly. The scan lives in the background
    precisely because Firefox destroys the popup on blur.
 
+**Sidebar** (the "always out" mode)
+
+13. Click **Sidebar** in the popup (or press Alt+Shift+S). The same panel should open in
+    Firefox's sidebar, full width, and stay open when you click the page.
+14. With the sidebar open, navigate to a different coin on the same site. Within a second
+    or two the panel should show the new token and rescan by itself — no clicking. If the
+    name is missing but the address is right, the panel is waiting on a site permission:
+    press **Allow** once and it should fill in.
+15. Switch to a tab with no token (e.g. a news site). The panel should drop to "No token
+    detected", not keep showing the previous coin.
+16. Turn off "Scan automatically" in Settings. Navigating to a new coin should now show
+    the detected token with a SCAN button, and wait for you.
+17. Restart Firefox. The sidebar should reopen on its own.
+
 **Settings**
 
 10. Set minimum liquidity to `$5,000,000`, save, rescan. A "below your minimum" signal
@@ -121,6 +135,8 @@ element reference resolves. But **no part of this has executed inside Firefox** 
 build environment had no browser and no network. Untested in a real browser:
 
 - the `runtime.connect` port between popup and background,
+- `sidebarAction.open()` from the popup button, `extension.getViews({type: 'sidebar'})`
+  for detecting sidebar mode, and `tabs.onUpdated` firing on single-page navigation,
 - `scripting.executeScript` injection and its return value,
 - `browser.storage.local` persistence,
 - actual popup rendering and layout at 392px.

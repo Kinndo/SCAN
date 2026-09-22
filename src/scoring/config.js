@@ -59,6 +59,7 @@ export const DEFAULT_SETTINGS = {
   riskWeights: { ...DEFAULT_RISK_WEIGHTS },
   minCoverage: 0.5,
   maxSignalsShown: 5,
+  autoScanInSidebar: true, // sidebar rescans on its own when the active tab changes token
 };
 
 export const PROFILE_PRESETS = {

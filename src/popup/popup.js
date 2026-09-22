@@ -11,6 +11,8 @@ import { formatUsd, formatPercent, formatAge, formatRelativeTime, shortenAddress
 import { validateManualInput } from '../utils/validation.js';
 import { pick } from '../core/model.js';
 import { CHAINS } from '../core/constants.js';
+import { getSettings } from '../storage/storage.js';
+import { isSidebarView, shouldRescan, isNavigationUpdate, debounce } from './sidebar.js';
 
 const ext = globalThis.browser ?? globalThis.chrome;
 const $ = (id) => document.getElementById(id);
@@ -23,9 +25,13 @@ const state = {
   expanded: null, // 'opportunity' | 'risk' | null
   showAllAlerts: false,
   scanning: false,
+  settings: null,
+  windowId: null,
 };
 
 let port = null;
+const isSidebar = isSidebarView(ext, window);
+let followGeneration = 0;
 
 // --------------------------------------------------------------------------
 // Boot
@@ -34,9 +40,29 @@ let port = null;
 init();
 
 async function init() {
+  document.documentElement.classList.toggle('sidebar', isSidebar);
+  $('btn-sidebar').hidden = isSidebar;
+  state.settings = await getSettings();
+  try {
+    state.windowId = (await ext.windows.getCurrent()).id;
+  } catch {
+    state.windowId = null;
+  }
   wireEvents();
   connect();
   await detect();
+  if (isSidebar) {
+    watchActiveTab();
+    await followActiveTab();
+  }
+  // Settings changed while the panel is open apply to the next scan.
+  try {
+    ext.storage.onChanged.addListener(() => {
+      getSettings().then((next) => { state.settings = next; });
+    });
+  } catch {
+    /* no change events: settings load on next open */
+  }
 }
 
 function connect() {
@@ -88,6 +114,8 @@ function wireEvents() {
   $('btn-more-alerts').addEventListener('click', () => { state.showAllAlerts = !state.showAllAlerts; render(); });
   $('token-address').addEventListener('click', copyAddress);
   $('btn-debug').addEventListener('click', copyDebugReport);
+  $('btn-sidebar').addEventListener('click', onOpenSidebar);
+  $('btn-allow-site').addEventListener('click', onAllowSite);
 }
 
 // --------------------------------------------------------------------------
@@ -96,12 +124,114 @@ function wireEvents() {
 
 async function detect() {
   try {
-    const result = await ext.runtime.sendMessage({ type: 'DETECT' });
+    const result = await ext.runtime.sendMessage({ type: 'DETECT', windowId: state.windowId });
     state.detection = result;
-    renderDetectPreview(result);
   } catch (err) {
     state.detection = { ok: false, message: String((err && err.message) || err) };
-    renderDetectPreview(state.detection);
+  }
+  renderDetectPreview(state.detection);
+  renderHostPermissionPrompt(state.detection);
+}
+
+// --------------------------------------------------------------------------
+// Sidebar mode: follow the active tab
+// --------------------------------------------------------------------------
+
+function watchActiveTab() {
+  const refresh = debounce(async () => {
+    await detect();
+    await followActiveTab();
+  }, 600);
+  try {
+    ext.tabs.onActivated.addListener((info) => {
+      if (state.windowId === null || info.windowId === state.windowId) refresh();
+    });
+    ext.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      if (!tab || !tab.active) return;
+      if (state.windowId !== null && tab.windowId !== state.windowId) return;
+      if (!isNavigationUpdate(changeInfo)) return;
+      refresh();
+    });
+  } catch {
+    /* without tab events the sidebar still scans on demand */
+  }
+}
+
+/** Decide what the sidebar shows for the tab it has just looked at. */
+async function followActiveTab() {
+  const generation = ++followGeneration;
+  const d = state.detection;
+  if (!d || !d.ok) {
+    showView('idle');
+    return;
+  }
+  const prev = state.target ? state.target.address : null;
+  if (d.address === prev && state.analysis) {
+    showView('result');
+    return;
+  }
+  if (!shouldRescan(prev, d, state.settings)) {
+    showView('idle');
+    return;
+  }
+  // Single-page trading apps swap the URL first and fill in the header a
+  // moment later. Give the page's own name one more chance before scanning
+  // without it - unless reading the page needs a permission we lack.
+  const hasName = d.identityHints && d.identityHints.symbolHint;
+  if (!hasName && !d.needsHostPermission) {
+    await sleep(1200);
+    if (generation !== followGeneration) return;
+    await detect();
+    if (generation !== followGeneration) return;
+    if (!state.detection || !state.detection.ok) {
+      showView('idle');
+      return;
+    }
+  }
+  await onScanClick();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// --------------------------------------------------------------------------
+// Per-site read permission
+// --------------------------------------------------------------------------
+
+function renderHostPermissionPrompt(result) {
+  const strip = $('host-permission');
+  const origin = result && result.needsHostPermission;
+  if (!origin) {
+    strip.hidden = true;
+    return;
+  }
+  $('host-permission-text').textContent = result.ok
+    ? `Allow SCAN to read ${result.hostname} so the token's name shows here automatically.`
+    : `Allow SCAN to read ${result.hostname} to look for a contract address on the page.`;
+  strip.hidden = false;
+}
+
+async function onAllowSite() {
+  const d = state.detection;
+  if (!d || !d.needsHostPermission) return;
+  let granted = false;
+  try {
+    granted = await ext.permissions.request({ origins: [d.needsHostPermission] });
+  } catch {
+    granted = false;
+  }
+  if (!granted) return;
+  await detect();
+  if (state.detection && state.detection.ok) await onScanClick();
+}
+
+async function onOpenSidebar() {
+  try {
+    await ext.sidebarAction.open();
+    window.close();
+  } catch {
+    $('btn-sidebar').textContent = 'View \u203a Sidebar \u203a SCAN';
   }
 }
 

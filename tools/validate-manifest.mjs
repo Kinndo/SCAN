@@ -36,6 +36,11 @@ if (manifest.background?.service_worker) {
 for (const script of manifest.background?.scripts ?? []) requireFile(script, 'background.scripts');
 if (manifest.action?.default_popup) requireFile(manifest.action.default_popup, 'action.default_popup');
 if (manifest.options_ui?.page) requireFile(manifest.options_ui.page, 'options_ui.page');
+if (manifest.sidebar_action?.default_panel) requireFile(manifest.sidebar_action.default_panel, 'sidebar_action.default_panel');
+if (manifest.sidebar_action?.default_icon) requireFile(manifest.sidebar_action.default_icon, 'sidebar_action.default_icon');
+if (manifest.commands?._execute_sidebar_action && !manifest.sidebar_action) {
+  problems.push('_execute_sidebar_action command declared but there is no sidebar_action');
+}
 for (const icon of Object.values(manifest.icons ?? {})) requireFile(icon, 'icons');
 for (const icon of Object.values(manifest.action?.default_icon ?? {})) requireFile(icon, 'action.default_icon');
 

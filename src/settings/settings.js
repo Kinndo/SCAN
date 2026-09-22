@@ -119,6 +119,7 @@ function rowEl(text, tag) {
 
 function populate() {
   for (const key of NUMERIC_FIELDS) $(key).value = settings[key];
+  $('autoScanInSidebar').checked = settings.autoScanInSidebar !== false;
   for (const input of document.querySelectorAll('[data-chain]')) {
     input.checked = settings.preferredChains.includes(input.dataset.chain);
   }
@@ -139,6 +140,7 @@ function collect() {
     const v = Number($(key).value);
     if (Number.isFinite(v)) next[key] = v;
   }
+  next.autoScanInSidebar = $('autoScanInSidebar').checked;
   next.preferredChains = [...document.querySelectorAll('[data-chain]')]
     .filter((i) => i.checked).map((i) => i.dataset.chain);
   next.opportunityWeights = { ...next.opportunityWeights };

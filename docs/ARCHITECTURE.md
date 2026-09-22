@@ -21,6 +21,14 @@
  popup/popup.js                      <- renders, re-renders on every stage
 ```
 
+The same `popup.html` also serves as the **sidebar panel** (`sidebar_action`). In sidebar
+mode (`src/popup/sidebar.js` decides, via `extension.getViews({type:'sidebar'})`) the page
+additionally listens to `tabs.onActivated` / `tabs.onUpdated`, re-detects on navigation
+only — not on the title churn a live price ticker causes — and rescans when the token
+changes. Because activeTab is never granted to a sidebar, reading a page there needs a
+per-site host permission, requested from the panel's **Allow** button; URL detection and
+scoring do not.
+
 The background owns scan state because a Firefox popup is destroyed when it loses focus.
 A scan started before the popup closes keeps running, and reopening re-renders instantly
 from `SCAN_UPDATE`/`SCAN_COMPLETE` replayed over the `scan` port.

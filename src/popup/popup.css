@@ -221,3 +221,19 @@ html, body {
 }
 .footer-btn:hover { color: var(--text); border-color: var(--dim); }
 .stage.empty { color: var(--dim); border-color: var(--border); }
+
+/* --- sidebar mode: fill whatever width the user drags the sidebar to --- */
+html.sidebar, html.sidebar body { width: 100%; min-width: 0; }
+html.sidebar #app { max-height: none; }
+
+/* --- per-site read permission (sidebar cannot rely on activeTab) --- */
+.host-permission {
+  display: flex; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 6px 12px; font-size: 11px; line-height: 1.35;
+  background: #0f1a2b; color: var(--muted); border-bottom: 1px solid var(--border);
+}
+.allow-btn {
+  flex: 0 0 auto; background: var(--accent); color: #051021; border: 0; border-radius: 4px;
+  font: 700 10px/1 var(--mono); letter-spacing: .8px; padding: 5px 9px; cursor: pointer;
+}
+.allow-btn:hover { background: #64adff; }
