@@ -20,7 +20,7 @@ test('site URL adapters extract chain, address and address kind', () => {
     [`https://gmgn.ai/sol/token/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'token', site: 'gmgn' }],
     [`https://www.dextools.io/app/en/ether/pair-explorer/${EVM}`, { chain: 'ethereum', address: EVM.toLowerCase(), addressKind: 'pair', site: 'dextools' }],
     [`https://photon-sol.tinyastro.io/en/lp/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'pool', site: 'photon' }],
-    [`https://axiom.trade/meme/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'unknown', site: 'axiom' }],
+    [`https://axiom.trade/meme/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'pair', site: 'axiom' }],
     [`https://solscan.io/token/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'token', site: 'solscan' }],
     [`https://etherscan.io/token/${EVM}`, { chain: 'ethereum', address: EVM.toLowerCase(), addressKind: 'token', site: 'evm-explorer' }],
     [`https://basescan.org/token/${EVM}`, { chain: 'base', address: EVM.toLowerCase(), addressKind: 'token', site: 'evm-explorer' }],
@@ -79,19 +79,19 @@ test('an address seen in several places outranks one seen once', () => {
 
 
 /**
- * Pinned against a real URL copied from the browser. Axiom carries the chain in
- * the query string and is multi-chain, and its /meme/ route does not state
- * whether the address is the mint or the pool - so the kind is reported as
- * unknown rather than guessed.
+ * Pinned against real URLs copied from the browser. Axiom carries the chain in
+ * the query string and is multi-chain. Its /meme/ route carries the POOL: a
+ * live DexScreener lookup resolved /meme/FAKr6z... to mint 2k1g...pump with
+ * pairAddress equal to the URL address.
  */
-test('the real Axiom URL is parsed exactly', () => {
-  const url = 'https://axiom.trade/meme/4X9MJ1NgmNvSKuCbf9LC5QgDdYuyQTQcA1tz6JNv4ryR'
+test('the real Axiom URL is parsed exactly, as a pair', () => {
+  const url = 'https://axiom.trade/meme/FAKr6zhYTLAqpUowErobB1mvJr2xmtaANxYNLszGHhrg'
     + '?chain=sol&chains=sol&pulseChains=sol&trackerChains=sol,robinhood,bnb,eth&discoverChains=sol';
   const got = detectFromUrl(url);
   assert.deepEqual(got, {
-    address: '4X9MJ1NgmNvSKuCbf9LC5QgDdYuyQTQcA1tz6JNv4ryR',
+    address: 'FAKr6zhYTLAqpUowErobB1mvJr2xmtaANxYNLszGHhrg',
     chain: 'solana',
-    addressKind: 'unknown',
+    addressKind: 'pair',
     site: 'axiom',
     method: 'url',
   });

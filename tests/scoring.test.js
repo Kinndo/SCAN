@@ -264,3 +264,31 @@ test('a chip scored from one surviving input says so', () => {
   const full = analyze(makeSnapshot(), { now: NOW }).keySignals.find((k) => k.label === 'Momentum');
   assert.doesNotMatch(full.text, /partial data/);
 });
+
+/**
+ * Seen live with DexScreener alone: coverage 0.34 against a 0.35 threshold
+ * refused a risk score by rounding luck. The refusal is now a rule: market
+ * figures alone (liquidity, age, volume, sell pressure) never produce one.
+ */
+test('risk refuses to score from market figures alone', () => {
+  const s = makeSnapshot();
+  for (const k of Object.keys(s.holders)) s.holders[k] = null;
+  for (const k of Object.keys(s.contract)) s.contract[k] = null;
+  for (const k of Object.keys(s.dev)) s.dev[k] = null;
+  const r = computeRisk(s, { now: NOW, minCoverage: 0 });
+  assert.equal(r.insufficientData, true);
+  assert.match(r.summary, /no holder or contract checks/);
+  assert.ok(r.factors.some((f) => f.key === 'tokenAge'), 'the market factors are still listed for the breakdown');
+});
+
+test('one structural check is enough for a score to be emitted', () => {
+  const s = makeSnapshot();
+  for (const k of Object.keys(s.holders)) s.holders[k] = null;
+  for (const k of Object.keys(s.dev)) s.dev[k] = null;
+  s.contract.lpBurnedOrLockedPct = null;
+  s.contract.honeypot = null; s.contract.buyTaxPct = null; s.contract.sellTaxPct = null;
+  // Only mint/freeze authority remain.
+  const r = computeRisk(s, { now: NOW, minCoverage: 0 });
+  assert.equal(r.insufficientData, false);
+  assert.ok(Number.isFinite(r.score));
+});

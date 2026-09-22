@@ -13,6 +13,7 @@ import { inferChainFromAddress, normalizeAddress, isNonTokenAddress } from '../u
 import { registry } from '../services/providerRegistry.js';
 import { createMockProvider } from '../services/providers/mockProvider.js';
 import { createDexScreenerProvider } from '../services/providers/dexscreenerProvider.js';
+import { createRugCheckProvider } from '../services/providers/rugcheckProvider.js';
 import { runScan } from '../services/marketData.js';
 import { TtlCache } from '../utils/caching.js';
 import { getSettings, getProviderConfig, setLastScan, getLastScan, cacheStore } from '../storage/storage.js';
@@ -23,6 +24,7 @@ const ext = globalThis.browser ?? globalThis.chrome;
 // whether it is switched on; the registry only offers configured ones.
 registry.register(createMockProvider());
 registry.register(createDexScreenerProvider());
+registry.register(createRugCheckProvider());
 
 const cache = new TtlCache(cacheStore);
 

@@ -219,3 +219,25 @@ test('self-test reports the live shape whether or not it matches expectations', 
   const down = createDexScreenerProvider({ fetchImpl: scripted([['/latest/dex/tokens/', 503]]).fetchImpl });
   assert.match((await down.test()).error, /HTTP 503/);
 });
+
+test('resolve: a declared pair is looked up as one first - a single call', async () => {
+  const { fetchImpl, calls } = scripted([[`/latest/dex/pairs/solana/${PAIR}`, { pairs: [fullPair()] }]]);
+  const p = createDexScreenerProvider({ fetchImpl });
+  const r = await p.resolve({ chain: 'solana', address: PAIR, addressKind: 'pair' });
+  assert.equal(r.address, BONK);
+  assert.equal(r.resolvedFrom, PAIR);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /\/latest\/dex\/pairs\/solana\//);
+});
+
+test('resolve: a "pair" that is really a mint still resolves via the fallback', async () => {
+  const { fetchImpl, calls } = scripted([
+    [`/latest/dex/pairs/solana/${BONK}`, { pairs: null }],
+    [`/latest/dex/tokens/${BONK}`, { pairs: [fullPair()] }],
+  ]);
+  const p = createDexScreenerProvider({ fetchImpl });
+  const r = await p.resolve({ chain: 'solana', address: BONK, addressKind: 'pair' });
+  assert.equal(r.address, BONK);
+  assert.equal(r.resolvedFrom, null);
+  assert.equal(calls.length, 2);
+});

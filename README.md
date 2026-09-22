@@ -43,15 +43,20 @@ Settings › **Data providers** › **Enable** next to DexScreener. Firefox asks
 permission to contact `api.dexscreener.com` — that origin only. Demo data switches itself
 off at the same time so live and placeholder figures are never mixed.
 
-Then press **Test**. It fetches a known token and prints the live status, timing, the
-response's keys and what the translator made of them. The endpoint and field names were
-written from DexScreener's documentation without a live check, so **if a scan shows
-`Unknown` where the site shows a number, paste the Test output** — a wrong field name is
-a one-line fix once the real shape is visible.
+Then **Enable** RugCheck the same way (Solana only) for holder concentration, mint/freeze
+authority, LP lock status and creator holdings — the Risk side.
 
-What DexScreener fills: identity, market and social. Holders, contract safety and deployer
-activity still need their own providers ([roadmap](docs/ROADMAP.md)); until then those
-risk checks read *Unable to verify* and are excluded from the score rather than assumed safe.
+Each provider has a **Test** button that fetches a known token and prints the live
+status, timing, the response's keys and what the translator made of them. DexScreener's
+shape was confirmed live on 2026-09-22; RugCheck's was written from its public report
+format and awaits the same confirmation. **If a scan shows `Unknown` where the site shows
+a number, paste the Test output** — a wrong field name is a one-line fix once the real
+shape is visible.
+
+A Risk Score is only ever emitted when at least one structural check (holders, authorities,
+LP lock, creator) could be run. Market figures alone — liquidity, age, volume — never
+produce one, because a low number computed while mint authority and holder concentration
+are unknown would read as reassurance it has not earned.
 
 ## Keep it open: sidebar mode
 

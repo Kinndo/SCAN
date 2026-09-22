@@ -120,14 +120,14 @@ export const SITES = [
   {
     id: 'axiom',
     match: /(^|\.)axiom\.trade$/i,
-    // /meme/{address}?chain=sol
+    // /meme/{poolAddress}?chain=sol
     //
-    // The address here is NOT known to be the mint. Axiom is a pool-centric
-    // trading terminal and the observed address for a Pump AMM token does not
-    // carry the pump.fun mint suffix, which suggests a pool address - but that
-    // is inference, not proof. Rather than guess and be confidently wrong, the
-    // kind is reported as 'unknown' so a provider resolves it (try it as a
-    // token, then as a pair) and the UI can say the target is unresolved.
+    // CONFIRMED 2026-09-22: a debug report showed
+    //   /meme/FAKr6zhYTLAqpUowErobB1mvJr2xmtaANxYNLszGHhrg
+    // resolving through DexScreener's pairs endpoint to mint 2k1g...pump on
+    // pumpswap, with pairAddress equal to the URL address. Axiom's /meme/
+    // route carries the POOL, not the token, so it is declared as a pair and
+    // the resolver looks it up as one first.
     extract: (u) => {
       const p = pathParts(u);
       const idx = p.indexOf('meme');
@@ -135,7 +135,7 @@ export const SITES = [
       // Axiom is multi-chain (its own URLs carry sol, bnb and eth), so the
       // chain comes from the query string rather than being hard-coded.
       const chain = normalizeChainSlug(u.searchParams.get('chain')) ?? 'solana';
-      return { chain, address: p[idx + 1], addressKind: 'unknown' };
+      return { chain, address: p[idx + 1], addressKind: 'pair' };
     },
   },
   {

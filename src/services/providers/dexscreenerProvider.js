@@ -5,11 +5,12 @@
  * a pair/pool address into the token it trades - which is what every Axiom
  * scan needs, since Axiom's URLs carry the pool.
  *
- * UNVERIFIED: the endpoint paths and field names below come from DexScreener's
- * public API documentation as remembered, not from a live response captured
- * during this build (the build environment had no network). Settings > Data
- * providers > Test fetches a known token and shows the real status and keys;
- * that is how a wrong field name gets found and fixed.
+ * VERIFIED LIVE 2026-09-22 via Settings > Data providers > Test: 200 in 23ms,
+ * top-level keys [schemaVersion, pairs], pair keys [chainId, dexId, url,
+ * pairAddress, labels, baseToken, quoteToken, priceNative, priceUsd, txns,
+ * volume, priceChange, liquidity, fdv, marketCap, pairCreatedAt, info].
+ * `boosts` is absent when a token has none. The pairs endpoint resolved an
+ * Axiom pool address to its pump.fun mint in the same session.
  *
  * Documented limit: 300 requests/minute. Every stage of one scan shares a
  * single request via an in-flight memo, so a scan costs one or two calls.
@@ -175,20 +176,25 @@ export function createDexScreenerProvider({ fetchImpl, now = () => Date.now() } 
       const kind = target.addressKind || 'token';
       const chain = target.chain || 'unknown';
 
-      // 1. Treat it as a token. The tokens endpoint is chain-agnostic, which
-      //    also settles an unknown EVM chain.
-      if (kind === 'token' || kind === 'unknown') {
-        const pair = await pairFor(target, ctx).catch(() => null);
-        if (pair) return resolutionFrom(pair, target, false);
-        if (kind === 'token') return null;
-      }
-
-      // 2. Treat it as a pair/pool on the chain we know.
-      if (chain !== 'unknown') {
+      const asPair = async () => {
+        if (chain === 'unknown') return null;
         const pair = await lookupPair(chain, target.address, ctx).catch(() => null);
-        if (pair && pair.baseToken && pair.baseToken.address) return resolutionFrom(pair, target, true);
-      }
-      return null;
+        return pair && pair.baseToken && pair.baseToken.address ? resolutionFrom(pair, target, true) : null;
+      };
+      // The tokens endpoint is chain-agnostic, which also settles an unknown
+      // EVM chain for a pasted 0x address.
+      const asToken = async () => {
+        const pair = await pairFor(target, ctx).catch(() => null);
+        return pair ? resolutionFrom(pair, target, false) : null;
+      };
+
+      // A declared pool is looked up as one first; a site that puts the mint
+      // where a pool is expected still resolves via the fallback.
+      if (kind === 'pair' || kind === 'pool') return (await asPair()) ?? (await asToken());
+      // Unknown: cheaper to try as a token first, then as a pool.
+      if (kind === 'unknown') return (await asToken()) ?? (await asPair());
+      // A token on an unknown chain only needs its chain settled.
+      return asToken();
     },
 
     async fetch(stage, target, ctx = {}) {

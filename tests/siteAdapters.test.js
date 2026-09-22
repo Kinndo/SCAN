@@ -99,7 +99,19 @@ test('Axiom: the bare "Buy" tab and "Buy SOL" never count as a ticker', async ()
   assert.equal(await identityOn('axiom.trade', 'Axiom SOL | Pulse', ['Buy', 'Sell', 'Buy SOL', 'Buy now']), null);
 });
 
-test('Axiom: the title still wins over the buy button when both are present', async () => {
-  const id = await identityOn('axiom.trade', 'CASHTAG ↑ $92.3K | Axiom SOL', ['CASHTAG', 'Cashtag', 'Buy CASHTAG']);
+/**
+ * Verbatim from a debug report: the title truncates the ticker to seven
+ * characters ("CashFro") while the button has it whole ("Buy CashFrog"). The
+ * button therefore wins whenever it is present.
+ */
+test('Axiom: the buy button beats the title, which truncates tickers', async () => {
+  const id = await identityOn('axiom.trade', 'CashFro $92.9K | Axiom SOL',
+    ['Discover', 'Pulse', 'SOL', 'Deposit', '9', 'CashFrog', 'CashFrog', '1.2%', '2h', 'Buy CashFrog']);
+  assert.deepEqual(id, { symbol: 'CashFrog', name: 'CashFrog', source: 'axiom buy button', site: 'axiom' });
+});
+
+test('Axiom: the title is still the fallback when no buy button is on the page', async () => {
+  const id = await identityOn('axiom.trade', 'CASHTAG \u2191 $92.3K | Axiom SOL', ['CASHTAG', 'Cashtag']);
   assert.equal(id.source, 'axiom title');
+  assert.equal(id.symbol, 'CASHTAG');
 });

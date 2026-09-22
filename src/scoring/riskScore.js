@@ -262,6 +262,13 @@ export const RISK_FACTORS = [
   },
 ];
 
+/** Checks about the token's structure rather than its market. At least one
+ *  must be evaluable before a risk score is emitted. */
+export const STRUCTURAL_FACTORS = [
+  'holderConcentration', 'singleWhale', 'devHoldings', 'devSelling',
+  'mintAuthority', 'freezeAuthority', 'lpNotSecured', 'honeypotOrTax',
+];
+
 export function computeRisk(snapshot, options = {}) {
   const weights = { ...DEFAULT_RISK_WEIGHTS, ...(options.weights || {}) };
   const ctx = { now: options.now ?? Date.now() };
@@ -300,7 +307,13 @@ export function computeRisk(snapshot, options = {}) {
   const coverage = totalWeight > 0 ? pointsAvailable / totalWeight : 0;
   const minCoverage = options.minCoverage ?? 0.35;
 
-  if (pointsAvailable === 0 || coverage < minCoverage) {
+  // Market figures alone (liquidity, age, volume, sell pressure) must never
+  // produce a risk score. A low number computed while mint authority, holder
+  // concentration and honeypot status are all unknown reads as reassurance it
+  // has not earned. This is an explicit rule, not a coverage coincidence.
+  const hasStructuralEvidence = evaluated.some((f) => STRUCTURAL_FACTORS.includes(f.key));
+
+  if (pointsAvailable === 0 || coverage < minCoverage || !hasStructuralEvidence) {
     return {
       key: 'risk',
       label: 'Risk Score',
@@ -309,7 +322,9 @@ export function computeRisk(snapshot, options = {}) {
       coverage: round(coverage, 2),
       factors: evaluated.sort(bySeverity),
       unverified,
-      summary: `Insufficient data - only ${Math.round(coverage * 100)}% of risk checks could be evaluated.`,
+      summary: !hasStructuralEvidence
+        ? 'Insufficient data - no holder or contract checks could be run, so risk cannot be assessed from market figures alone.'
+        : `Insufficient data - only ${Math.round(coverage * 100)}% of risk checks could be evaluated.`,
     };
   }
 

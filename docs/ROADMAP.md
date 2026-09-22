@@ -27,21 +27,24 @@ Before writing a provider, verify against live responses. The seams are already 
    which fields are present for a *10-minute-old, $18K-liquidity* token rather than for an
    established one. The failure mode this product must survive is a brand-new token where
    half the fields are absent.
-2. **Market/DEX provider** → `market` + `identity` + `social`. **Built: DexScreener**
-   (`src/services/providers/dexscreenerProvider.js`), enabled from Settings, verified by
-   its Test button rather than in this build. Awaiting first live confirmation of the
-   response shape.
+2. **Market/DEX provider** → `market` + `identity` + `social`. **Built and verified live
+   (2026-09-22): DexScreener** (`src/services/providers/dexscreenerProvider.js`). Response
+   shape matched; an Axiom pool address resolved to its mint in the same session.
 3. **Resolve pair/pool addresses to tokens.** **Built.** The orchestrator runs a resolution
    step before any stage when the kind is pair/pool/unknown or the chain is unknown; the
    DexScreener provider tries the address as a token, then as a pair, and the snapshot
    records `resolvedBy` / `resolvedFrom` / `pairAddress`. Cached for a day.
-4. **Holder provider** → `holders`. Top-10/20 concentration, largest non-LP holder, holder
-   count over time. Distinguishing an AMM vault from a human whale is the hard part — until
-   it is solved, report `largestPct` and leave `largestNonLpPct` null rather than guessing.
-5. **Contract-security provider** → `contract`. Chain-specific: mint/freeze authority and
-   Token-2022 extensions on Solana; honeypot, taxes, owner permissions and blacklist on EVM.
-   Do not pretend the two chains have the same model.
-6. **Deployer provider** → `dev`. Deployer holdings, selling, funding source.
+4. **Holder provider** → `holders`. **Built, awaiting live verification: RugCheck**
+   (`src/services/providers/rugcheckProvider.js`, Solana). Pool vaults are set aside using
+   the report's `knownAccounts` so a Raydium pool holding 30% is liquidity, not a whale;
+   `largestPct` keeps the raw figure alongside `largestNonLpPct`. EVM holders still need a
+   source (GoPlus).
+5. **Contract-security provider** → `contract`. **Solana: RugCheck** (mint/freeze
+   authority, LP locked %, Token-2022 transfer fee as tax). `honeypot` is left unknown on
+   Solana - freeze authority is the equivalent risk. EVM (honeypot, taxes, owner,
+   blacklist) still needs GoPlus.
+6. **Deployer provider** → `dev`. **Solana: RugCheck** gives the creator and its current
+   holding; selling history is not in the report and stays unknown rather than 0.
 7. **Social** → `social`. Keep it a small weight and only claim what is measurable. Channel
    *existence* is honest; inferred "engagement" from an unverified source is not.
 

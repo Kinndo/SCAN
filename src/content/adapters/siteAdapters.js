@@ -67,17 +67,18 @@ globalThis.ScanSiteAdapters = (function () {
       identity() {
         const title = document.title || '';
         const lines = textLines();
-        const m = title.match(
-          /^\s*([A-Za-z0-9_.-]{1,24})\s+(?:[↑↓→↗↘]\s*)?\$[\d.,]+\s*[KMBT]?\s*\|\s*Axiom\b/i,
-        );
-        let symbol = m && !NUMBERISH.test(m[1]) ? m[1] : null;
-        let source = 'axiom title';
+        // The buy button comes first: the title truncates tickers to seven
+        // characters (observed: title "CashFro $92.9K | Axiom SOL" for a
+        // token whose button reads "Buy CashFrog"), and feed pages leave the
+        // ticker out of the title altogether.
+        let symbol = buyButtonTicker(lines);
+        let source = 'axiom buy button';
         if (!symbol) {
-          // Feed pages ("Axiom SOL | Pulse") keep the ticker out of the title,
-          // and token pages have a bare "Axiom" title for a moment after an
-          // in-app navigation. The buy button covers both.
-          symbol = buyButtonTicker(lines);
-          source = 'axiom buy button';
+          const m = title.match(
+            /^\s*([A-Za-z0-9_.-]{1,24})\s+(?:[\u2191\u2193\u2192\u2197\u2198]\s*)?\$[\d.,]+\s*[KMBT]?\s*\|\s*Axiom\b/i,
+          );
+          symbol = m && !NUMBERISH.test(m[1]) ? m[1] : null;
+          source = 'axiom title';
         }
         if (!symbol) return null;
         return { symbol, name: nameAfterTicker(symbol, lines), source };

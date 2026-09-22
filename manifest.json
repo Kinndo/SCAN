@@ -53,6 +53,7 @@
   ],
   "optional_host_permissions": [
     "<all_urls>",
+    "https://api.rugcheck.xyz/*",
     "https://api.dexscreener.com/*",
     "https://api.geckoterminal.com/*",
     "https://api.mainnet-beta.solana.com/*",
