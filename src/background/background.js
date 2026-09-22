@@ -127,7 +127,7 @@ function seedFromHints(hints) {
   if (hints.symbolHint) identity.symbol = hints.symbolHint;
   if (hints.nameHint) identity.name = hints.nameHint;
   if (!Object.keys(identity).length) return null;
-  identity.identitySource = 'page';
+  identity.identitySource = hints.symbolSource ? `page (${hints.symbolSource})` : 'page';
   return { identity };
 }
 

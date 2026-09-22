@@ -122,33 +122,87 @@ globalThis.ScanDomAdapter = (function () {
     return n * mult;
   }
 
+  // Words that are never a token name, plus the site's own branding. Without
+  // this an "Axiom" or "DEX Screener" title reads as the token's name, which
+  // is the same lie as inventing one.
+  const NAME_STOPLIST = new Set([
+    'chart', 'charts', 'price', 'prices', 'buy', 'sell', 'swap', 'trade', 'trading',
+    'token', 'tokens', 'coin', 'coins', 'dex', 'screener', 'terminal', 'dashboard',
+    'explorer', 'scan', 'home', 'app', 'pair', 'pairs', 'market', 'markets', 'memescope',
+  ]);
+
+  const QUOTES = 'SOL|USD|USDC|USDT|ETH|WETH|BNB';
+
+  function siteWords() {
+    // "axiom.trade" -> {axiom, trade}; "www.dexscreener.com" -> {dexscreener, com}
+    const host = (location.hostname || '').replace(/^www\./, '').toLowerCase();
+    return new Set(host.split('.').filter(Boolean));
+  }
+
+  function plausibleSymbol(value, site) {
+    if (!value) return false;
+    const v = value.trim();
+    if (v.length < 2 || v.length > 12) return false;
+    const lower = v.toLowerCase();
+    if (NAME_STOPLIST.has(lower)) return false;
+    if (site.has(lower)) return false;           // the site's own name
+    if (!/^[A-Za-z0-9]+$/.test(v)) return false;
+    if (/^\d+$/.test(v)) return false;            // a bare number is a price, not a ticker
+    return true;
+  }
+
+  /**
+   * Identity read off the page.
+   *
+   * Only STRONG patterns are accepted - a "$TICKER" mention or a "TICKER/QUOTE"
+   * pair label. There is deliberately no "just use the page title" fallback:
+   * titles are branding ("Axiom", "DEX Screener"), and a confidently wrong name
+   * is worse than none. When nothing strong matches, this returns null and the
+   * UI says the name is unavailable.
+   */
   function extractIdentityHints() {
     const title = (document.title || '').trim();
     const og = document.querySelector('meta[property="og:title"]');
     const ogTitle = og ? (og.getAttribute('content') || '').trim() : '';
-    const source = ogTitle || title;
+    const site = siteWords();
 
-    // Real trading pages write tickers in mixed case ("Nuts/USD on Pump AMM",
-    // "$Nuts"), so an uppercase-only pattern silently matches nothing.
-    const ticker = source.match(/\$([A-Za-z0-9]{2,12})\b/) ||
-      source.match(/\b([A-Za-z0-9]{2,12})\s*\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b/i);
+    const pairRe = new RegExp(`\\b([A-Za-z0-9]{2,12})\\s*/\\s*(?:${QUOTES})\\b`, 'i');
+    const cashRe = /\$([A-Za-z0-9]{2,12})\b/;
 
-    // Fall back to the leading segment of the title, then drop any trading-pair
-    // tail: "Nuts/USD on Pump AMM - axiom.trade" -> "Nuts".
-    let nameHint = null;
-    if (source) {
-      const lead = source
-        .split(/\s+[|\u00b7\u2013\u2014-]\s+/)[0]
-        .replace(/\s*\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b.*$/i, '')
-        .trim();
-      if (lead && lead.length <= 40) nameHint = lead;
+    let symbolHint = null;
+    let symbolSource = null;
+
+    for (const [text, label] of [[ogTitle, 'og:title'], [title, 'title']]) {
+      if (!text) continue;
+      for (const re of [cashRe, pairRe]) {
+        const m = text.match(re);
+        if (m && plausibleSymbol(m[1], site)) {
+          symbolHint = m[1];
+          symbolSource = label;
+          break;
+        }
+      }
+      if (symbolHint) break;
+    }
+
+    // Trading UIs often keep the ticker only in a chart legend ("Nuts/USD on
+    // Pump AMM"), never in the document title. Scan visible text as a second
+    // pass, still requiring a pair label rather than any capitalised word.
+    if (!symbolHint) {
+      const body = document.body ? (document.body.innerText || '').slice(0, 30000) : '';
+      const m = body.match(pairRe);
+      if (m && plausibleSymbol(m[1], site)) {
+        symbolHint = m[1];
+        symbolSource = 'page text';
+      }
     }
 
     return {
       pageTitle: title || null,
       ogTitle: ogTitle || null,
-      symbolHint: ticker ? ticker[1] : null,
-      nameHint,
+      symbolHint,
+      symbolSource,
+      nameHint: null, // never guessed - a real metadata provider supplies this
     };
   }
 

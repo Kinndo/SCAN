@@ -213,13 +213,18 @@ function render() {
   // rather than inventing one - the address is the identifier that matters.
   const name = s.identity.name;
   const symbol = s.identity.symbol;
+  const fromPage = typeof s.identity.identitySource === 'string' && s.identity.identitySource.startsWith('page');
   const nameNode = $('token-name');
-  nameNode.textContent = name || 'Name unavailable';
-  nameNode.className = name ? 'token-name' : 'token-name token-name-missing';
-  nameNode.title = s.identity.identitySource === 'page'
-    ? 'Read from the page title, not from a data provider'
+  const headline = name || symbol || 'Name unavailable';
+  nameNode.textContent = headline;
+  nameNode.className = name || symbol ? 'token-name' : 'token-name token-name-missing';
+  nameNode.title = fromPage
+    ? `Read from the page (${s.identity.identitySource}), not from a data provider`
     : '';
-  $('token-ticker').textContent = symbol ? `$${symbol}` : shortenAddress(s.identity.address, 6, 6);
+  // Do not print the ticker twice when it is standing in as the headline.
+  $('token-ticker').textContent = symbol && name
+    ? `$${symbol}`
+    : shortenAddress(s.identity.address, 6, 6);
   $('token-chain').textContent = (CHAINS[s.identity.chain] || CHAINS.unknown).label;
   $('token-source').textContent = describeSource(state.target, s.identity);
   $('token-address').textContent = shortenAddress(s.identity.address);
