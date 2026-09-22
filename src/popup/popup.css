@@ -214,3 +214,10 @@ html, body {
 }
 
 .token-name-missing { color: var(--dim); font-weight: 400; font-style: italic; }
+
+.footer-btn {
+  background: none; border: 1px solid var(--border); color: var(--dim); cursor: pointer;
+  font: 9.5px var(--mono); padding: 1px 6px; border-radius: 3px; margin-left: auto;
+}
+.footer-btn:hover { color: var(--text); border-color: var(--dim); }
+.stage.empty { color: var(--dim); border-color: var(--border); }

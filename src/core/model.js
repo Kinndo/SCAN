@@ -111,7 +111,8 @@ export function emptySnapshot(identity = {}) {
       sources: [],
       stagesComplete: [],
       stagesPending: [...STAGES],
-      errors: [],
+      stagesEmpty: [], // providers answered, but had nothing for this token
+      errors: [], // a provider failed, was rate limited, or none exists
       isMockData: false,
       partial: true,
     },
@@ -162,6 +163,15 @@ export function markStageComplete(snapshot, stage, sourceLabel) {
   meta.stagesPending = meta.stagesPending.filter((s) => s !== stage);
   if (sourceLabel && !meta.sources.includes(sourceLabel)) meta.sources.push(sourceLabel);
   meta.partial = meta.stagesPending.length > 0;
+  return snapshot;
+}
+
+/** A stage where every provider ran and returned null. Not a failure - the
+ *  data genuinely is not there - so it is kept apart from errors. */
+export function recordEmpty(snapshot, stage) {
+  if (!snapshot.meta.stagesEmpty.includes(stage)) snapshot.meta.stagesEmpty.push(stage);
+  snapshot.meta.stagesPending = snapshot.meta.stagesPending.filter((s) => s !== stage);
+  snapshot.meta.partial = snapshot.meta.stagesPending.length > 0;
   return snapshot;
 }
 

@@ -219,5 +219,29 @@ globalThis.ScanDomAdapter = (function () {
     };
   }
 
-  return { collectCandidates, extractVisibleMetrics, extractIdentityHints, parseMoney };
+  /**
+   * What the page actually exposes, for the popup's "Copy debug" button. This
+   * is the raw material the name heuristic works from, so a wrong or missing
+   * name can be diagnosed from a pasted report instead of a screenshot.
+   */
+  function collectDebug() {
+    const og = document.querySelector('meta[property="og:title"]');
+    const body = document.body ? (document.body.innerText || '') : '';
+    const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+    const slashLines = lines
+      .filter((l) => /\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b/i.test(l))
+      .slice(0, 12);
+    return {
+      title: document.title || null,
+      ogTitle: og ? og.getAttribute('content') : null,
+      hostname: location.hostname,
+      bodyChars: body.length,
+      bodyLineCount: lines.length,
+      firstLines: lines.slice(0, 15),
+      slashLines,
+      hasCanvas: document.querySelectorAll('canvas').length,
+    };
+  }
+
+  return { collectCandidates, extractVisibleMetrics, extractIdentityHints, collectDebug, parseMoney };
 })();

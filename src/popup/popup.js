@@ -87,6 +87,7 @@ function wireEvents() {
   $('card-risk').addEventListener('click', () => toggleBreakdown('risk'));
   $('btn-more-alerts').addEventListener('click', () => { state.showAllAlerts = !state.showAllAlerts; render(); });
   $('token-address').addEventListener('click', copyAddress);
+  $('btn-debug').addEventListener('click', copyDebugReport);
 }
 
 // --------------------------------------------------------------------------
@@ -434,14 +435,68 @@ function renderProgress(snapshot) {
   const box = $('progress');
   box.textContent = '';
   const done = new Set(snapshot.meta.stagesComplete || []);
+  const empty = new Set(snapshot.meta.stagesEmpty || []);
   const failed = new Set((snapshot.meta.errors || []).map((e) => e.stage));
   const pending = new Set(snapshot.meta.stagesPending || []);
   const labels = { identity: 'token', market: 'market', holders: 'holders', contract: 'contract', dev: 'dev', social: 'social' };
   for (const [stage, label] of Object.entries(labels)) {
-    const cls = done.has(stage) ? 'done' : failed.has(stage) ? 'failed' : pending.has(stage) ? 'pending' : '';
-    const mark = done.has(stage) ? '✓' : failed.has(stage) ? '✗' : '…';
-    box.append(el('span', `stage ${cls}`, `${label} ${mark}`));
+    // "no data" is dim, not red: the provider worked, the data is not there.
+    let cls = '';
+    let mark = '\u2026';
+    if (done.has(stage)) { cls = 'done'; mark = '\u2713'; }
+    else if (empty.has(stage)) { cls = 'empty'; mark = 'no data'; }
+    else if (failed.has(stage)) { cls = 'failed'; mark = '\u2717'; }
+    else if (pending.has(stage)) { cls = 'pending'; }
+    const chip = el('span', `stage ${cls}`, `${label} ${mark}`);
+    if (failed.has(stage)) {
+      const err = (snapshot.meta.errors || []).find((e) => e.stage === stage);
+      if (err) chip.title = err.message;
+    }
+    box.append(chip);
   }
+}
+
+/**
+ * Everything needed to diagnose a wrong name or a blank panel without a
+ * screenshot: what the page exposes, what detection decided, and what each
+ * scan stage did. Copied to the clipboard only; nothing leaves the machine.
+ */
+async function copyDebugReport() {
+  const d = state.detection || {};
+  const s = state.snapshot;
+  const a = state.analysis;
+  const report = {
+    generated: new Date().toISOString(),
+    extension: (ext.runtime.getManifest && ext.runtime.getManifest().version) || null,
+    tabUrl: d.tabUrl || null,
+    detection: d.ok
+      ? { address: d.address, chain: d.chain, addressKind: d.addressKind, site: d.site, method: d.method, confidence: d.confidence ?? null }
+      : { ok: false, reason: d.reason, message: d.message },
+    identityHints: d.identityHints || null,
+    page: d.pageDebug || null,
+    scan: s ? {
+      identity: s.identity,
+      stagesComplete: s.meta.stagesComplete,
+      stagesEmpty: s.meta.stagesEmpty,
+      stagesPending: s.meta.stagesPending,
+      errors: s.meta.errors,
+      sources: s.meta.sources,
+      isMockData: s.meta.isMockData,
+    } : null,
+    scores: a ? {
+      opportunity: { score: a.opportunity.score, coverage: a.opportunity.coverage, insufficient: a.opportunity.insufficientData },
+      risk: { score: a.risk.score, coverage: a.risk.coverage, insufficient: a.risk.insufficientData },
+      completeness: a.completeness,
+    } : null,
+  };
+  const btn = $('btn-debug');
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    btn.textContent = 'copied';
+  } catch {
+    btn.textContent = 'copy failed';
+  }
+  setTimeout(() => { btn.textContent = 'copy debug'; }, 1200);
 }
 
 async function copyAddress() {

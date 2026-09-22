@@ -8,7 +8,7 @@
  * aborts the scan and never substitutes a placeholder value.
  */
 
-import { emptySnapshot, mergeSnapshot, markStageComplete, recordError, STAGES } from '../core/model.js';
+import { emptySnapshot, mergeSnapshot, markStageComplete, recordError, recordEmpty, STAGES } from '../core/model.js';
 import { TTL, cacheKey } from '../utils/caching.js';
 import { analyze } from '../scoring/index.js';
 
@@ -76,6 +76,8 @@ export async function runScan(target, deps = {}) {
             snapshot = mergeSnapshot(snapshot, result.patch);
             markStageComplete(snapshot, stage, result.providerId);
             if (result.cached) snapshot.meta.sources.push(`${result.providerId}:cached`);
+          } else if (result && result.empty) {
+            recordEmpty(snapshot, stage);
           } else {
             recordError(snapshot, stage, result && result.error ? result.error : 'No data returned for this stage.');
           }
@@ -117,5 +119,8 @@ async function fetchStage(stage, target, { registry, cache, config, signal }) {
     }
   }
 
+  // Every candidate ran and none threw: the data is absent, not broken.
+  const allEmpty = candidates.length > 0 && errors.every((e) => e.endsWith(': no data'));
+  if (allEmpty) return { patch: null, empty: true };
   return { patch: null, error: errors.length ? errors.join('; ') : 'No provider returned data.' };
 }

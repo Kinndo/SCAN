@@ -55,8 +55,15 @@ export async function detectToken() {
     // The URL gives us the address but never the token's name. Read the page
     // for that too - this runs while the user is still looking at the idle
     // screen, before they press SCAN, so it costs them nothing.
-    const identityHints = await readPageHints(tab.id);
-    return { ok: true, ...fromUrl, identityHints, tabUrl: tab.url, hostname: safeHostname(tab.url) };
+    const page = await readPage(tab.id);
+    return {
+      ok: true,
+      ...fromUrl,
+      identityHints: page && page.identityHints ? page.identityHints : null,
+      pageDebug: page && page.debug ? page.debug : null,
+      tabUrl: tab.url,
+      hostname: safeHostname(tab.url),
+    };
   }
 
   // 2. Fall back to reading the page. activeTab means this only ever happens
@@ -93,6 +100,7 @@ export async function detectToken() {
         alternatives: ranked.slice(1, 4).map((c) => c.address),
         pageMetrics: pageResult.pageMetrics || {},
         identityHints: pageResult.identityHints || {},
+        pageDebug: pageResult.debug || null,
         hostname: pageResult.hostname,
         tabUrl: tab.url,
       };
@@ -103,6 +111,7 @@ export async function detectToken() {
     ok: false,
     reason: 'unidentified',
     message: 'Unable to automatically identify this token.',
+    pageDebug: pageResult && pageResult.debug ? pageResult.debug : null,
     supportedSite: isSupportedSite(tab.url),
     hostname: safeHostname(tab.url),
     tabUrl: tab.url,
@@ -110,11 +119,10 @@ export async function detectToken() {
 }
 
 /** Best-effort page read for the token's name/ticker. Never fatal. */
-async function readPageHints(tabId) {
+async function readPage(tabId) {
   try {
     const injected = await ext.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
-    const result = injected && injected[0] ? injected[0].result : null;
-    return result && result.identityHints ? result.identityHints : null;
+    return injected && injected[0] ? injected[0].result : null;
   } catch {
     return null;
   }

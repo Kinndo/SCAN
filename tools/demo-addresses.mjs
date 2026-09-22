@@ -9,7 +9,7 @@
  *   node tools/demo-addresses.mjs
  */
 
-import { archetypeFor, ARCHETYPES, buildMockModel } from '../src/services/providers/mockProvider.js';
+import { archetypeFor, ARCHETYPES, buildMockModel, SPARSE_SENTINEL } from '../src/services/providers/mockProvider.js';
 import { isSolanaAddress, isEvmAddress } from '../src/utils/validation.js';
 import { formatUsd } from '../src/utils/formatting.js';
 
@@ -32,10 +32,12 @@ const WHAT = {
   thinAndRisky: 'thin liquidity, concentrated supply, hot volume',
   dangerSignals: 'mint + freeze live, deployer selling, LP unlocked - high risk',
   fading: 'price sliding on draining volume, sellers dominant',
-  sparseData: 'most fields unavailable - exercises every Insufficient data path',
+  sparseData: 'most fields unavailable - exercises every Insufficient data path (opt-in: only these sentinel addresses reach it)',
 };
 
 function findFor(kind, { evm = false } = {}) {
+  // The data-poor archetype is opt-in: real addresses never hash onto it.
+  if (kind === 'sparseData') return evm ? '0x5aa55e' + '0'.repeat(34) : 'Sparse' + 'A'.repeat(38);
   const alphabet = evm ? HEX : B58;
   const length = evm ? 42 : 44;
   const prefix = evm ? '0x' : '';

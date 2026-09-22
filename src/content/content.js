@@ -17,12 +17,18 @@
     candidates: [],
     pageMetrics: {},
     identityHints: {},
+    debug: null,
     error: null,
   };
   try {
     result.candidates = adapter.collectCandidates();
     result.pageMetrics = adapter.extractVisibleMetrics();
     result.identityHints = adapter.extractIdentityHints();
+    try {
+      result.debug = adapter.collectDebug();
+    } catch {
+      result.debug = null;
+    }
     result.ok = true;
   } catch (err) {
     result.error = String((err && err.message) || err);

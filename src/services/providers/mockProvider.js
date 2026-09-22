@@ -50,9 +50,25 @@ function rng(seed) {
   };
 }
 
+/**
+ * Addresses that opt into the data-poor archetype. Real-looking addresses never
+ * land on it by chance: a random real token showing an almost-empty panel with
+ * four red stages is indistinguishable from the extension failing, which is
+ * exactly the confusion it caused. Use tools/demo-addresses.mjs to get one.
+ */
+export const SPARSE_SENTINEL = { base58: /^Sparse/, evm: /^0x5aa55e/i };
+
+export function isSparseFixture(address) {
+  const a = String(address || '');
+  return SPARSE_SENTINEL.base58.test(a) || SPARSE_SENTINEL.evm.test(a);
+}
+
+const ROTATING = ARCHETYPES.filter((k) => k !== 'sparseData');
+
 export function archetypeFor(address) {
+  if (isSparseFixture(address)) return 'sparseData';
   const h = hashAddress(address);
-  return ARCHETYPES[h % ARCHETYPES.length];
+  return ROTATING[h % ROTATING.length];
 }
 
 const PROFILES = {

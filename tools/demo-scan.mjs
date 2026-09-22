@@ -84,6 +84,7 @@ if (analysis.risk.unverified.length) {
 
 console.log(`\nstages  : ${stageTimes.join('  ')}`);
 console.log(`total   : ${Date.now() - started}ms   completeness=${Math.round(analysis.completeness * 100)}%`);
+if (snapshot.meta.stagesEmpty.length) console.log(`no data : ${snapshot.meta.stagesEmpty.join(', ')}`);
 if (snapshot.meta.errors.length) {
   console.log('errors  : ' + snapshot.meta.errors.map((e) => `${e.stage}: ${e.message}`).join(' | '));
 }

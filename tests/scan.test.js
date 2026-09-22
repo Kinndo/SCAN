@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ProviderRegistry } from '../src/services/providerRegistry.js';
-import { createMockProvider, buildMockModel, archetypeFor, ARCHETYPES } from '../src/services/providers/mockProvider.js';
+import { createMockProvider, buildMockModel, archetypeFor, ARCHETYPES, isSparseFixture } from '../src/services/providers/mockProvider.js';
 import { runScan } from '../src/services/marketData.js';
 import { TtlCache } from '../src/utils/caching.js';
 import { pick } from '../src/core/model.js';
@@ -52,10 +52,25 @@ test('mock data is internally consistent', () => {
   }
 });
 
-test('addresses spread across every archetype including the data-poor one', () => {
+const SPARSE_SOL = 'Sparse' + 'A'.repeat(38); // valid base58, 44 chars
+const SPARSE_EVM = '0x5aa55e' + '0'.repeat(34);
+
+test('ordinary addresses rotate across the rich archetypes only', () => {
   const seen = new Set();
   for (let i = 0; i < 400; i += 1) seen.add(archetypeFor(`addr-${i}`));
-  assert.deepEqual([...seen].sort(), [...ARCHETYPES].sort());
+  const rich = ARCHETYPES.filter((k) => k !== 'sparseData');
+  assert.deepEqual([...seen].sort(), [...rich].sort());
+  // A real token must never land on the near-empty panel by hash luck - it
+  // reads as the extension failing.
+  assert.ok(!seen.has('sparseData'));
+});
+
+test('the data-poor archetype is reached only through sentinel fixture addresses', () => {
+  assert.ok(isSparseFixture(SPARSE_SOL));
+  assert.ok(isSparseFixture(SPARSE_EVM));
+  assert.equal(archetypeFor(SPARSE_SOL), 'sparseData');
+  assert.equal(archetypeFor(SPARSE_EVM), 'sparseData');
+  assert.equal(isSparseFixture(SOL), false);
 });
 
 test('a scan fills the snapshot, scores it and marks it as mock data', async () => {
@@ -82,19 +97,29 @@ test('stages arrive progressively and each update carries a usable analysis', as
   assert.ok(lastStages > firstStages, 'the snapshot should accumulate across updates');
 });
 
-test('a data-poor token records stage errors instead of inventing values', async () => {
-  // Find an address the mock maps onto the sparse archetype.
-  let sparse = null;
-  for (let i = 0; i < 500 && !sparse; i += 1) {
-    if (archetypeFor(`sparse-${i}`) === 'sparseData') sparse = `sparse-${i}`;
-  }
-  assert.ok(sparse, 'expected to find a sparse-archetype address');
-
-  const { snapshot, analysis } = await runScan({ chain: 'solana', address: sparse }, { registry: reg() });
+test('a data-poor token records empty stages, not errors, and invents nothing', async () => {
+  const { snapshot, analysis } = await runScan({ chain: 'solana', address: SPARSE_SOL }, { registry: reg() });
   assert.equal(pick(snapshot, 'holders.top10Pct'), null);
   assert.equal(pick(snapshot, 'contract.mintAuthorityActive'), null);
-  assert.ok(snapshot.meta.errors.length > 0, 'missing stages must be recorded as errors');
+  // The provider ran fine and simply had nothing: that is "no data", which the
+  // UI shows dimmed, not "failed", which it shows red.
+  for (const stage of ['holders', 'contract', 'dev', 'social']) {
+    assert.ok(snapshot.meta.stagesEmpty.includes(stage), `${stage} should be empty`);
+  }
+  assert.equal(snapshot.meta.errors.length, 0, 'nothing actually failed');
+  assert.equal(snapshot.meta.partial, false);
   assert.ok(analysis.risk.unverified.length > 0);
+});
+
+test('a provider that throws is an error, a provider that returns null is not', async () => {
+  const registry = new ProviderRegistry()
+    .register({ id: 'quiet', label: 'Quiet', chains: '*', stages: ['holders'], fetch: async () => null })
+    .register({ id: 'broken', label: 'Broken', chains: '*', stages: ['contract'], fetch: async () => { throw new Error('HTTP 500'); } });
+  const { snapshot } = await runScan({ chain: 'solana', address: SOL }, { registry, stages: ['holders', 'contract'] });
+  assert.deepEqual(snapshot.meta.stagesEmpty, ['holders']);
+  assert.equal(snapshot.meta.errors.length, 1);
+  assert.equal(snapshot.meta.errors[0].stage, 'contract');
+  assert.match(snapshot.meta.errors[0].message, /HTTP 500/);
 });
 
 test('a failing provider never aborts the scan', async () => {

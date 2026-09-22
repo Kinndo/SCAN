@@ -94,7 +94,27 @@ one into the popup's manual-entry box to reach that UI state deliberately:
     fixture. That check should disappear from the breakdown and the risk score drop.
 12. Switch profile Conservative ↔ Aggressive and confirm the thresholds change.
 
-## 5. What has not been tested
+## 5. When something looks wrong
+
+Press **copy debug** in the popup footer and paste the result. It contains the tab URL,
+what detection decided, the page's title and the text lines the name heuristic saw, and
+what every scan stage did (complete / no data / failed, with the error). It is copied to
+the clipboard only - nothing is transmitted. This is far more useful than a screenshot:
+a wrong name or a blank panel can be diagnosed from it directly.
+
+Stage chips at the bottom of the panel mean:
+
+| Chip | Meaning |
+| --- | --- |
+| `holders ✓` (green) | Provider returned data |
+| `holders no data` (grey) | Provider ran fine and had nothing - honest, not broken |
+| `holders ✗` (red) | A provider failed; hover for the error |
+| `holders …` (amber) | Still loading |
+
+Note the demo provider never puts a real-looking address on the near-empty panel -
+that state is reached only through the sentinel fixtures from `demo-addresses.mjs`.
+
+## 6. What has not been tested
 
 The scoring and data layers are covered by 69 tests, and the validator proves every
 element reference resolves. But **no part of this has executed inside Firefox** — the
