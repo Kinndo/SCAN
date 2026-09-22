@@ -123,42 +123,52 @@ globalThis.ScanDomAdapter = (function () {
   }
 
   // Words that are never a token name, plus the site's own branding. Without
-  // this an "Axiom" or "DEX Screener" title reads as the token's name, which
-  // is the same lie as inventing one.
+  // this an "Axiom" or "DEX Screener" title reads as the token's name.
   const NAME_STOPLIST = new Set([
     'chart', 'charts', 'price', 'prices', 'buy', 'sell', 'swap', 'trade', 'trading',
     'token', 'tokens', 'coin', 'coins', 'dex', 'screener', 'terminal', 'dashboard',
     'explorer', 'scan', 'home', 'app', 'pair', 'pairs', 'market', 'markets', 'memescope',
+    'marketcap', 'mcap', 'volume', 'liquidity', 'supply', 'holders',
+    // Quote currencies: "USD/SOL" is a display toggle, not a token.
+    'usd', 'usdc', 'usdt', 'sol', 'eth', 'weth', 'bnb', 'wsol', 'usd1',
   ]);
 
   const QUOTES = 'SOL|USD|USDC|USDT|ETH|WETH|BNB';
+  const NUMBERISH = /^[\d.,]+\s*[KMBT]?$/i;
 
   function siteWords() {
-    // "axiom.trade" -> {axiom, trade}; "www.dexscreener.com" -> {dexscreener, com}
+    // "axiom.trade" -> {axiom, trade}
     const host = (location.hostname || '').replace(/^www\./, '').toLowerCase();
     return new Set(host.split('.').filter(Boolean));
   }
 
-  function plausibleSymbol(value, site) {
+  function plausibleName(value, site) {
     if (!value) return false;
     const v = value.trim();
-    if (v.length < 2 || v.length > 12) return false;
+    if (v.length < 2 || v.length > 40) return false;
+    if (!/[A-Za-z]/.test(v)) return false;        // must contain a letter
+    if (NUMBERISH.test(v)) return false;          // "139K", "1.25M" - a price, not a name
+    if (!/^[A-Za-z0-9 ._-]+$/.test(v)) return false;
     const lower = v.toLowerCase();
     if (NAME_STOPLIST.has(lower)) return false;
-    if (site.has(lower)) return false;           // the site's own name
-    if (!/^[A-Za-z0-9]+$/.test(v)) return false;
-    if (/^\d+$/.test(v)) return false;            // a bare number is a price, not a ticker
+    if (site.has(lower)) return false;
     return true;
   }
 
   /**
    * Identity read off the page.
    *
-   * Only STRONG patterns are accepted - a "$TICKER" mention or a "TICKER/QUOTE"
-   * pair label. There is deliberately no "just use the page title" fallback:
-   * titles are branding ("Axiom", "DEX Screener"), and a confidently wrong name
-   * is worse than none. When nothing strong matches, this returns null and the
-   * UI says the name is unavailable.
+   * Only two strong patterns are accepted:
+   *   1. a "$TICKER" mention in the title, and
+   *   2. a chart-legend line: "<name>/<quote> on <venue>", anchored to the
+   *      start of a line.
+   *
+   * The " on " suffix and the line anchor matter. A bare "X/USD" scan over page
+   * text is far too loose on a trading UI: it matched the "USD/SOL" display
+   * toggle, and a market-cap figure sitting next to a slash, reporting a token
+   * called "139K". There is deliberately no "use the page title" fallback
+   * either - titles are branding. When nothing strong matches, this returns
+   * null and the UI says the name is unavailable.
    */
   function extractIdentityHints() {
     const title = (document.title || '').trim();
@@ -166,34 +176,37 @@ globalThis.ScanDomAdapter = (function () {
     const ogTitle = og ? (og.getAttribute('content') || '').trim() : '';
     const site = siteWords();
 
-    const pairRe = new RegExp(`\\b([A-Za-z0-9]{2,12})\\s*/\\s*(?:${QUOTES})\\b`, 'i');
+    // Multi-word names are normal ("VERY Looong Cat"), so the capture allows
+    // spaces - which is exactly why it needs the anchor and the " on " suffix.
+    const legendRe = new RegExp(
+      `^\\s*([A-Za-z0-9][A-Za-z0-9 ._-]{1,39}?)\\s*/\\s*(?:${QUOTES})\\b\\s+on\\s+`,
+      'im',
+    );
     const cashRe = /\$([A-Za-z0-9]{2,12})\b/;
 
     let symbolHint = null;
+    let nameHint = null;
     let symbolSource = null;
 
     for (const [text, label] of [[ogTitle, 'og:title'], [title, 'title']]) {
       if (!text) continue;
-      for (const re of [cashRe, pairRe]) {
-        const m = text.match(re);
-        if (m && plausibleSymbol(m[1], site)) {
-          symbolHint = m[1];
-          symbolSource = label;
-          break;
-        }
+      const cash = text.match(cashRe);
+      if (cash && plausibleName(cash[1], site)) {
+        symbolHint = cash[1];
+        symbolSource = label;
+        break;
       }
-      if (symbolHint) break;
     }
 
-    // Trading UIs often keep the ticker only in a chart legend ("Nuts/USD on
-    // Pump AMM"), never in the document title. Scan visible text as a second
-    // pass, still requiring a pair label rather than any capitalised word.
-    if (!symbolHint) {
-      const body = document.body ? (document.body.innerText || '').slice(0, 30000) : '';
-      const m = body.match(pairRe);
-      if (m && plausibleSymbol(m[1], site)) {
-        symbolHint = m[1];
-        symbolSource = 'page text';
+    const sources = [[ogTitle, 'og:title'], [title, 'title'],
+      [document.body ? (document.body.innerText || '').slice(0, 30000) : '', 'chart legend']];
+    for (const [text, label] of sources) {
+      if (!text) continue;
+      const m = text.match(legendRe);
+      if (m && plausibleName(m[1], site)) {
+        nameHint = m[1].trim();
+        if (!symbolHint) symbolSource = label;
+        break;
       }
     }
 
@@ -201,8 +214,8 @@ globalThis.ScanDomAdapter = (function () {
       pageTitle: title || null,
       ogTitle: ogTitle || null,
       symbolHint,
+      nameHint,
       symbolSource,
-      nameHint: null, // never guessed - a real metadata provider supplies this
     };
   }
 

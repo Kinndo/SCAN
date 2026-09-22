@@ -20,16 +20,43 @@ async function hintsFor(title, ogTitle = null, { bodyText = '', hostname = 'exam
   return globalThis.ScanDomAdapter.extractIdentityHints();
 }
 
-test('reads a mixed-case ticker out of a trading-pair title', async () => {
-  const h = await hintsFor('Nuts/USD on Pump AMM \u00b7 1s \u00b7 axiom.trade', null, { hostname: 'axiom.trade' });
-  assert.equal(h.symbolHint, 'Nuts');
+test('reads a token name out of a chart legend', async () => {
+  const h = await hintsFor('Axiom', null, {
+    hostname: 'axiom.trade',
+    bodyText: 'Discover Pulse Trackers\nNuts/USD on Pump AMM \u00b7 1s \u00b7 axiom.trade\nPrice $0.047',
+  });
+  assert.equal(h.nameHint, 'Nuts');
+  assert.equal(h.symbolSource, 'chart legend');
+});
+
+test('a multi-word name is kept whole', async () => {
+  const h = await hintsFor('Axiom', null, {
+    hostname: 'axiom.trade',
+    bodyText: '$172K\nVERY Looong Cat/USD on Pump AMM \u00b7 1s \u00b7 axiom.trade\nO173K H173K',
+  });
+  assert.equal(h.nameHint, 'VERY Looong Cat', 'must not truncate to the last word');
 });
 
 /**
- * The regression: on axiom.trade the document title is just the site's name,
- * and the previous "leading title segment" fallback reported the token as
- * being called "Axiom".
+ * Both regressions seen on a live Axiom page. A bare "X/QUOTE" scan matched the
+ * "USD/SOL" display toggle and a market-cap figure beside a slash, so the popup
+ * reported a token called "139K". The legend pattern is anchored to the start
+ * of a line and requires the " on <venue>" tail for exactly this reason.
  */
+test('display toggles and price figures are never read as a name', async () => {
+  const junk = [
+    'USD/SOL  MarketCap/Price',
+    '139K/USD',
+    'Market Cap $245.8K\n139K/USD\nSupply 985M',
+    'MarketCap/Price',
+    'Liquidity/USD on hand',
+  ];
+  for (const bodyText of junk) {
+    const h = await hintsFor('Axiom', null, { hostname: 'axiom.trade', bodyText });
+    assert.equal(h.nameHint, null, `${JSON.stringify(bodyText)} must not yield a name`);
+  }
+});
+
 test('the site\'s own branding is never reported as the token', async () => {
   for (const [title, hostname] of [
     ['Axiom', 'axiom.trade'],
@@ -43,51 +70,35 @@ test('the site\'s own branding is never reported as the token', async () => {
   }
 });
 
-test('a ticker in the chart legend is found when the title has none', async () => {
-  const h = await hintsFor('Axiom', null, {
-    hostname: 'axiom.trade',
-    bodyText: 'Discover Pulse Trackers\nNuts/USD on Pump AMM \u00b7 1s \u00b7 axiom.trade\nPrice $0.047',
-  });
-  assert.equal(h.symbolHint, 'Nuts');
-  assert.equal(h.symbolSource, 'page text');
-});
-
-test('generic words are never treated as a ticker', async () => {
-  for (const title of ['Price/USD', 'Chart/USD', 'Market/USD']) {
-    const h = await hintsFor(title, null, { hostname: 'example.com' });
-    assert.equal(h.symbolHint, null, `${title} must be rejected`);
-  }
-});
-
-test('reads a $-prefixed ticker', async () => {
-  const h = await hintsFor('$BONK price and chart');
+test('reads a $-prefixed ticker from the title', async () => {
+  const h = await hintsFor('$BONK price and chart', null, { hostname: 'example.com' });
   assert.equal(h.symbolHint, 'BONK');
+});
+
+test('a legend in the document title is used too', async () => {
+  const h = await hintsFor('Nuts/USD on Pump AMM \u00b7 axiom.trade', null, { hostname: 'axiom.trade' });
+  assert.equal(h.nameHint, 'Nuts');
 });
 
 test('a title with no ticker evidence yields nothing rather than a guess', async () => {
   const h = await hintsFor('Pep Doge | Axiom', null, { hostname: 'axiom.trade' });
   assert.equal(h.symbolHint, null);
-  assert.equal(h.nameHint, null, 'names are never guessed from page text');
-});
-
-test('uppercase pair titles still work', async () => {
-  const h = await hintsFor('BONK/SOL - DEX Screener', null, { hostname: 'dexscreener.com' });
-  assert.equal(h.symbolHint, 'BONK');
+  assert.equal(h.nameHint, null, 'names are never guessed from branding');
 });
 
 test('og:title wins over document.title', async () => {
-  const h = await hintsFor('Some Aggregator', '$WIF on Raydium');
+  const h = await hintsFor('Some Aggregator', '$WIF on Raydium', { hostname: 'example.com' });
   assert.equal(h.symbolHint, 'WIF');
 });
 
-test('an unhelpful title yields nulls rather than junk', async () => {
-  const h = await hintsFor('');
+test('an unhelpful page yields nulls rather than junk', async () => {
+  const h = await hintsFor('', null, { hostname: 'example.com' });
   assert.equal(h.symbolHint, null);
   assert.equal(h.nameHint, null);
 });
 
-test('an overlong title is not used as a name', async () => {
-  const h = await hintsFor('x'.repeat(80));
+test('an overlong candidate is rejected', async () => {
+  const h = await hintsFor('x'.repeat(80), null, { hostname: 'example.com' });
   assert.equal(h.nameHint, null);
   assert.equal(h.symbolHint, null);
 });
