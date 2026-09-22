@@ -60,6 +60,7 @@ export function emptySnapshot(identity = {}) {
       decimals: null,
       pairAddress: null,
       dexId: null,
+      identitySource: null, // 'page' when the name/ticker was read off the page
     },
     market: {
       priceUsd: null,

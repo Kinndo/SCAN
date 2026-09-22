@@ -13,6 +13,26 @@ function reg() {
   return new ProviderRegistry().register(createMockProvider({ latencyFactor: 0 }));
 }
 
+test('the mock provider never invents a token identity', async () => {
+  const { snapshot } = await runScan({ chain: 'solana', address: SOL }, { registry: reg() });
+  // Placeholder market numbers are labelled and understood as fake. A
+  // fabricated name is not: it makes the panel look like it is describing a
+  // different token than the one on screen.
+  assert.equal(snapshot.identity.name, null);
+  assert.equal(snapshot.identity.symbol, null);
+  assert.equal(snapshot.identity.decimals, null);
+  assert.equal(snapshot.identity.address, SOL, 'the address is the one real identifier');
+});
+
+test('page-read identity seeds the scan and is marked as page-derived', async () => {
+  const seed = { identity: { symbol: 'Nuts', name: 'Nuts', identitySource: 'page' } };
+  const { snapshot } = await runScan({ chain: 'solana', address: SOL }, { registry: reg(), seed });
+  assert.equal(snapshot.identity.symbol, 'Nuts');
+  assert.equal(snapshot.identity.identitySource, 'page');
+  assert.ok(snapshot.meta.sources.includes('page'));
+  assert.equal(snapshot.identity.address, SOL, 'a page hint must never change the address');
+});
+
 test('mock data is deterministic for a given address', () => {
   const a = buildMockModel(SOL, 'solana', 1_700_000_000_000);
   const b = buildMockModel(SOL, 'solana', 1_700_000_000_000);
@@ -41,7 +61,6 @@ test('addresses spread across every archetype including the data-poor one', () =
 test('a scan fills the snapshot, scores it and marks it as mock data', async () => {
   const { snapshot, analysis } = await runScan({ chain: 'solana', address: SOL }, { registry: reg() });
   assert.equal(snapshot.identity.address, SOL);
-  assert.ok(snapshot.identity.symbol);
   assert.ok(Number.isFinite(pick(snapshot, 'market.priceUsd')));
   assert.equal(snapshot.meta.partial, false);
   assert.equal(snapshot.meta.isMockData, true);

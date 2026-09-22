@@ -212,3 +212,5 @@ html, body {
   padding: 8px 12px 0; font-size: 9.5px; color: var(--dim); line-height: 1.5;
   border-top: 1px solid var(--border); margin-top: 4px;
 }
+
+.token-name-missing { color: var(--dim); font-weight: 400; font-style: italic; }

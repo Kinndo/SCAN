@@ -41,6 +41,16 @@ export async function runScan(target, deps = {}) {
   let snapshot = emptySnapshot(target);
   snapshot.meta.fetchedAt = now;
 
+  // Identity read from the page before the scan started. It is a hint, not a
+  // provider result, so it is tagged as such and any provider that can return
+  // authoritative metadata later will overwrite it.
+  if (deps.seed) {
+    snapshot = mergeSnapshot(snapshot, deps.seed);
+    if (deps.seed.identity && (deps.seed.identity.symbol || deps.seed.identity.name)) {
+      snapshot.meta.sources.push('page');
+    }
+  }
+
   const emit = (stage, done = false) => {
     if (typeof onUpdate !== 'function') return;
     try {

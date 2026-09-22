@@ -52,7 +52,11 @@ export async function detectToken() {
   // 1. URL adapters first - the most reliable signal available.
   const fromUrl = detectFromUrl(tab.url);
   if (fromUrl) {
-    return { ok: true, ...fromUrl, tabUrl: tab.url, hostname: safeHostname(tab.url) };
+    // The URL gives us the address but never the token's name. Read the page
+    // for that too - this runs while the user is still looking at the idle
+    // screen, before they press SCAN, so it costs them nothing.
+    const identityHints = await readPageHints(tab.id);
+    return { ok: true, ...fromUrl, identityHints, tabUrl: tab.url, hostname: safeHostname(tab.url) };
   }
 
   // 2. Fall back to reading the page. activeTab means this only ever happens
@@ -105,6 +109,28 @@ export async function detectToken() {
   };
 }
 
+/** Best-effort page read for the token's name/ticker. Never fatal. */
+async function readPageHints(tabId) {
+  try {
+    const injected = await ext.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
+    const result = injected && injected[0] ? injected[0].result : null;
+    return result && result.identityHints ? result.identityHints : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Turn page hints into an identity patch, marked as page-derived. */
+function seedFromHints(hints) {
+  if (!hints) return null;
+  const identity = {};
+  if (hints.symbolHint) identity.symbol = hints.symbolHint;
+  if (hints.nameHint) identity.name = hints.nameHint;
+  if (!Object.keys(identity).length) return null;
+  identity.identitySource = 'page';
+  return { identity };
+}
+
 function safeHostname(url) {
   try {
     return new URL(url).hostname;
@@ -140,6 +166,7 @@ export async function startScan(target) {
   const config = await getProviderConfig();
   const resolved = { ...target, address };
 
+  const seed = seedFromHints(target.identityHints);
   currentScan = { target: resolved, snapshot: null, analysis: null, status: 'running', startedAt: Date.now(), error: null };
   broadcast({ type: 'SCAN_STARTED', target: resolved });
 
@@ -149,6 +176,7 @@ export async function startScan(target) {
       cache,
       settings,
       config,
+      seed,
       onUpdate: ({ snapshot: snap, analysis: an, stage, done }) => {
         currentScan = { ...currentScan, snapshot: snap, analysis: an, status: done ? 'complete' : 'running' };
         broadcast({ type: 'SCAN_UPDATE', stage, done, snapshot: snap, analysis: an, target: resolved });

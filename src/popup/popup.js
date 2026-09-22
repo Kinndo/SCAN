@@ -133,6 +133,9 @@ async function onScanClick() {
     address: state.detection.address,
     chain: state.detection.chain,
     addressKind: state.detection.addressKind,
+    identityHints: state.detection.identityHints ?? null,
+    site: state.detection.site,
+    method: state.detection.method,
   });
 }
 
@@ -147,7 +150,7 @@ async function onManualScan() {
     return;
   }
   errBox.hidden = true;
-  await startScan({ address: parsed.address, chain: parsed.chain, addressKind: 'token' });
+  await startScan({ address: parsed.address, chain: parsed.chain, addressKind: 'token', method: 'manual' });
 }
 
 async function startScan(target) {
@@ -189,6 +192,7 @@ function renderScanningPlaceholder(target) {
   $('token-name').textContent = 'Loading…';
   $('token-ticker').textContent = shortenAddress(target.address, 6, 6);
   $('token-chain').textContent = (CHAINS[target.chain] || CHAINS.unknown).label;
+  $('token-source').textContent = describeSource(target, target);
   $('token-address').textContent = shortenAddress(target.address);
   for (const id of ['m-price', 'm-mcap', 'm-liq', 'm-vol', 'm-age', 'm-chg']) {
     const node = $(id);
@@ -205,9 +209,19 @@ function render() {
   $('demo-banner').hidden = !a.isMockData;
 
   // --- identity ---
-  $('token-name').textContent = s.identity.name || 'Unknown token';
-  $('token-ticker').textContent = s.identity.symbol ? `$${s.identity.symbol}` : shortenAddress(s.identity.address, 6, 6);
+  // With no metadata provider registered there is often no name at all. Say so
+  // rather than inventing one - the address is the identifier that matters.
+  const name = s.identity.name;
+  const symbol = s.identity.symbol;
+  const nameNode = $('token-name');
+  nameNode.textContent = name || 'Name unavailable';
+  nameNode.className = name ? 'token-name' : 'token-name token-name-missing';
+  nameNode.title = s.identity.identitySource === 'page'
+    ? 'Read from the page title, not from a data provider'
+    : '';
+  $('token-ticker').textContent = symbol ? `$${symbol}` : shortenAddress(s.identity.address, 6, 6);
   $('token-chain').textContent = (CHAINS[s.identity.chain] || CHAINS.unknown).label;
+  $('token-source').textContent = describeSource(state.target, s.identity);
   $('token-address').textContent = shortenAddress(s.identity.address);
   $('token-address').title = s.identity.address || '';
 
@@ -234,6 +248,18 @@ function render() {
   const sources = [...new Set((s.meta.sources || []).map((x) => x.split(':')[0]))];
   $('footer-sources').textContent = sources.length ? `src: ${sources.join(', ')}` : 'src: none';
   $('footer-time').textContent = state.scanning ? 'scanning…' : formatRelativeTime(a.generatedAt, Date.now());
+}
+
+/** "axiom - url - pool": where the address came from, and what kind it is.
+ *  Lets you check at a glance that the scan is pointed at the right thing. */
+function describeSource(target, identity) {
+  if (!target) return '--';
+  const parts = [];
+  if (target.site && target.site !== 'generic') parts.push(target.site);
+  if (target.method) parts.push(target.method === 'dom' ? 'page scan' : target.method);
+  const kind = identity && identity.addressKind;
+  if (kind && kind !== 'token') parts.push(kind);
+  return parts.length ? parts.join(' \u00b7 ') : '--';
 }
 
 function setMetric(id, text, extra = '') {

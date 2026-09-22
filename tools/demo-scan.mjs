@@ -46,7 +46,9 @@ const line = (k, v) => `  ${k.padEnd(14)} ${v}`;
 
 if (analysis.isMockData) console.log('\x1b[33m[DEMO DATA] placeholder values from the built-in mock provider\x1b[0m\n');
 
-console.log(`${snapshot.identity.name}  $${snapshot.identity.symbol}`);
+const shownName = snapshot.identity.name || 'Name unavailable';
+const shownTicker = snapshot.identity.symbol ? `$${snapshot.identity.symbol}` : snapshot.identity.address;
+console.log(`${shownName}  ${shownTicker}`);
 console.log(line('Price', formatUsd(pick(snapshot, 'market.priceUsd'))));
 console.log(line('Market Cap', formatUsd(pick(snapshot, 'market.marketCapUsd'))));
 console.log(line('Liquidity', formatUsd(pick(snapshot, 'market.liquidityUsd'))));

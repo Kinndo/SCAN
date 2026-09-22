@@ -142,9 +142,6 @@ export function buildMockModel(address, chain, now = Date.now()) {
     kind,
     chain,
     address,
-    symbol: mockSymbol(seed),
-    name: mockName(seed),
-    decimals: chain === 'solana' ? 6 + (seed % 4) : 18,
     supply,
     priceUsd,
     marketCapUsd,
@@ -182,15 +179,6 @@ export function buildMockModel(address, chain, now = Date.now()) {
   };
 }
 
-const SYLLABLES = ['pep', 'doge', 'wif', 'bonk', 'moon', 'floki', 'shib', 'turbo', 'mog', 'brett', 'gme', 'nyan'];
-function mockSymbol(seed) {
-  return (SYLLABLES[seed % SYLLABLES.length] + SYLLABLES[(seed >>> 5) % SYLLABLES.length]).toUpperCase().slice(0, 7);
-}
-function mockName(seed) {
-  const a = SYLLABLES[seed % SYLLABLES.length];
-  const b = SYLLABLES[(seed >>> 7) % SYLLABLES.length];
-  return `${a[0].toUpperCase()}${a.slice(1)} ${b[0].toUpperCase()}${b.slice(1)}`;
-}
 function mockWallet(seed, chain) {
   const hex = (seed >>> 0).toString(16).padStart(8, '0').repeat(5);
   return chain === 'solana' ? `Dev${hex.slice(0, 41)}` : `0x${hex.slice(0, 40)}`;
@@ -222,8 +210,14 @@ export function createMockProvider(options = {}) {
 
       switch (stage) {
         case 'identity':
+          // Deliberately returns NO name, symbol or decimals. Placeholder
+          // market numbers are labelled DEMO DATA and understood as fake, but a
+          // fabricated NAME makes the panel look like it is describing a
+          // different token than the one on screen - which is worse than
+          // showing nothing. Identity comes from the address (real), from the
+          // page, or not at all.
           return {
-            identity: { chain: target.chain, address: target.address, addressKind: target.addressKind ?? 'token', symbol: m.symbol, name: m.name, decimals: m.decimals, dexId: 'demo-dex' },
+            identity: { chain: target.chain, address: target.address, addressKind: target.addressKind ?? 'token', dexId: 'demo-dex' },
             meta: { isMockData: true },
           };
         case 'market':

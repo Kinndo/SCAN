@@ -126,13 +126,29 @@ globalThis.ScanDomAdapter = (function () {
     const title = (document.title || '').trim();
     const og = document.querySelector('meta[property="og:title"]');
     const ogTitle = og ? (og.getAttribute('content') || '').trim() : '';
-    // "$PEPE" / "PEPE/SOL" style tickers in the title.
-    const tickerMatch = (ogTitle || title).match(/\$([A-Z0-9]{2,12})\b/) ||
-      (ogTitle || title).match(/\b([A-Z0-9]{2,12})\s*\/\s*(?:SOL|USD|USDC|ETH|WETH|BNB)\b/);
+    const source = ogTitle || title;
+
+    // Real trading pages write tickers in mixed case ("Nuts/USD on Pump AMM",
+    // "$Nuts"), so an uppercase-only pattern silently matches nothing.
+    const ticker = source.match(/\$([A-Za-z0-9]{2,12})\b/) ||
+      source.match(/\b([A-Za-z0-9]{2,12})\s*\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b/i);
+
+    // Fall back to the leading segment of the title, then drop any trading-pair
+    // tail: "Nuts/USD on Pump AMM - axiom.trade" -> "Nuts".
+    let nameHint = null;
+    if (source) {
+      const lead = source
+        .split(/\s+[|\u00b7\u2013\u2014-]\s+/)[0]
+        .replace(/\s*\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b.*$/i, '')
+        .trim();
+      if (lead && lead.length <= 40) nameHint = lead;
+    }
+
     return {
       pageTitle: title || null,
       ogTitle: ogTitle || null,
-      symbolHint: tickerMatch ? tickerMatch[1] : null,
+      symbolHint: ticker ? ticker[1] : null,
+      nameHint,
     };
   }
 
