@@ -180,3 +180,74 @@ test('an aborted scan stops merging results', async () => {
   const { snapshot } = await runScan({ chain: 'solana', address: SOL }, { registry: reg(), signal: controller.signal });
   assert.equal(pick(snapshot, 'market.priceUsd'), null);
 });
+
+// --- resolution + configurable providers -----------------------------------
+
+const PAIR_ADDR = 'HVNwzt7Pxfu76KHCMQPTLuTCLTm6WnQ1esLv4eizseSv';
+
+function resolver() {
+  let calls = 0;
+  return {
+    calls: () => calls,
+    provider: {
+      id: 'resolver', label: 'Resolver', priority: 10, chains: '*', stages: [],
+      resolve: async (t) => { calls += 1; return t.address === PAIR_ADDR ? { address: SOL, chain: 'solana', addressKind: 'token', pairAddress: PAIR_ADDR, resolvedBy: 'resolver', resolvedFrom: PAIR_ADDR } : null; },
+      fetch: async () => null,
+    },
+  };
+}
+
+test('a pool address is resolved to its token before any stage runs', async () => {
+  const r = resolver();
+  const registry = reg().register(r.provider);
+  const seen = [];
+  registry.register({ id: 'spy', label: 'Spy', priority: 99, chains: '*', stages: ['market'], fetch: async (stage, t) => { seen.push(t.address); return null; } });
+
+  const { snapshot } = await runScan({ chain: 'solana', address: PAIR_ADDR, addressKind: 'unknown' }, { registry });
+  assert.equal(snapshot.identity.address, SOL, 'the snapshot is keyed by the token');
+  assert.equal(snapshot.identity.addressKind, 'token');
+  assert.equal(snapshot.identity.pairAddress, PAIR_ADDR);
+  assert.equal(snapshot.identity.resolvedBy, 'resolver');
+  assert.equal(snapshot.identity.resolvedFrom, PAIR_ADDR);
+  assert.deepEqual([...new Set(seen)], [SOL], 'stages must be fetched for the token, not the pool');
+});
+
+test('resolution is cached and a plain token address is never resolved', async () => {
+  const r = resolver();
+  const registry = reg().register(r.provider);
+  const cache = new TtlCache();
+  await runScan({ chain: 'solana', address: PAIR_ADDR, addressKind: 'pool' }, { registry, cache });
+  await runScan({ chain: 'solana', address: PAIR_ADDR, addressKind: 'pool' }, { registry, cache });
+  assert.equal(r.calls(), 1, 'second scan should hit the cache');
+  await runScan({ chain: 'solana', address: SOL, addressKind: 'token' }, { registry, cache });
+  assert.equal(r.calls(), 1, 'a known token on a known chain needs no resolution');
+});
+
+test('an unresolvable address scans as given, with the kind left honest', async () => {
+  const registry = reg().register(resolver().provider);
+  const { snapshot } = await runScan({ chain: 'solana', address: SOL, addressKind: 'pool' }, { registry });
+  assert.equal(snapshot.identity.address, SOL);
+  assert.equal(snapshot.identity.addressKind, 'pool');
+  assert.equal(snapshot.identity.resolvedBy, null);
+});
+
+test('demo data switches off through provider config, leaving stages unserved', async () => {
+  const registry = reg();
+  assert.equal(registry.candidates('market', 'solana', {}).length, 1, 'on by default');
+  assert.equal(registry.candidates('market', 'solana', { demoData: false }).length, 0);
+  const { snapshot, analysis } = await runScan({ chain: 'solana', address: SOL }, { registry, config: { demoData: false } });
+  assert.equal(snapshot.meta.stagesComplete.length, 0);
+  assert.ok(snapshot.meta.errors.every((e) => /No data provider/.test(e.message)));
+  assert.equal(analysis.opportunity.insufficientData, true);
+  assert.equal(analysis.isMockData, false);
+});
+
+test('a real provider outranks the mock for the stages it serves', () => {
+  const registry = reg().register({
+    id: 'real', label: 'Real', priority: 50, chains: '*', stages: ['market'],
+    isConfigured: (c) => Boolean(c.real && c.real.enabled), fetch: async () => null,
+  });
+  assert.deepEqual(registry.candidates('market', 'solana', { real: { enabled: true }, demoData: false }).map((p) => p.id), ['real']);
+  assert.deepEqual(registry.candidates('holders', 'solana', { real: { enabled: true }, demoData: false }).map((p) => p.id), []);
+  assert.deepEqual(registry.resolvers('solana', {}).map((p) => p.id), []);
+});

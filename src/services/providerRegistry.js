@@ -59,7 +59,22 @@ export class ProviderRegistry {
     return this.list()
       .filter((p) => p.stages.includes(stage))
       .filter((p) => this.supportsChain(p, chain))
-      .filter((p) => !p.requiresKey || (typeof p.isConfigured === 'function' ? p.isConfigured(config) : false))
+      .filter((p) => this.isUsable(p, config))
+      .sort((a, b) => b.priority - a.priority);
+  }
+
+  /** A provider decides for itself whether it is switched on for this config. */
+  isUsable(provider, config = {}) {
+    if (typeof provider.isConfigured === 'function') return Boolean(provider.isConfigured(config));
+    return !provider.requiresKey;
+  }
+
+  /** Providers able to turn a pair/pool/unknown address into a token, best first. */
+  resolvers(chain, config = {}) {
+    return this.list()
+      .filter((p) => typeof p.resolve === 'function')
+      .filter((p) => this.supportsChain(p, chain))
+      .filter((p) => this.isUsable(p, config))
       .sort((a, b) => b.priority - a.priority);
   }
 

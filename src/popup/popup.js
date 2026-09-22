@@ -115,6 +115,7 @@ function wireEvents() {
   $('token-address').addEventListener('click', copyAddress);
   $('btn-debug').addEventListener('click', copyDebugReport);
   $('btn-sidebar').addEventListener('click', onOpenSidebar);
+  $('btn-source-settings').addEventListener('click', () => ext.runtime.openOptionsPage());
   $('btn-allow-site').addEventListener('click', onAllowSite);
 }
 
@@ -391,6 +392,10 @@ function render() {
   if (!a || !s) return;
 
   $('demo-banner').hidden = !a.isMockData;
+  // Every stage refused for want of a provider: the user switched demo data
+  // off without enabling anything else. Say so instead of showing "--" everywhere.
+  const unserved = (s.meta.errors || []).filter((e) => /No data provider available/.test(e.message)).length;
+  $('source-banner').hidden = !(unserved > 0 && s.meta.stagesComplete.length === 0 && s.meta.stagesPending.length === 0);
 
   // --- identity ---
   // With no metadata provider registered there is often no name at all. Say so
@@ -456,6 +461,7 @@ function describeSource(target, identity) {
   }
   const kind = identity && identity.addressKind;
   if (kind && kind !== 'token') parts.push(KIND_LABELS[kind] ?? kind);
+  if (identity && identity.resolvedBy) parts.push(`resolved via ${identity.resolvedBy}`);
   return parts.length ? parts.join(' \u00b7 ') : '--';
 }
 

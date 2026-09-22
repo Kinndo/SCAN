@@ -5,10 +5,11 @@ Compresses the scattered signals around a memecoin into one dashboard you can re
 explainable read on what is measurable right now — and says plainly when something
 could not be measured.
 
-> **Phase 1 status:** the full pipeline (detection → data layer → scoring → UI) is built
-> and working, but the only registered data provider is a **built-in mock**. Every number
-> it shows is placeholder data and is labelled `DEMO DATA` in the UI. See
-> [Phase 2](docs/ROADMAP.md) for wiring real APIs.
+> **Status:** the full pipeline (detection → data layer → scoring → UI) is built and
+> working in Firefox. Out of the box it runs on a **built-in mock** whose figures are
+> placeholder data, labelled `DEMO DATA`. A real **DexScreener** provider (price, market
+> cap, liquidity, volume, transactions, age, socials, pair→token resolution, every chain,
+> no key) is included and switched on from Settings — see *Enabling real data* below.
 
 ## What it does
 
@@ -35,6 +36,22 @@ Everything (settings, cache, last scan) stays in `browser.storage.local` on your
 Permissions it asks for: `tabs` (to see the active tab's URL so the sidebar can follow
 you between coins), `activeTab` + `scripting` (to read the page you pressed SCAN on), and
 `storage`. Reading any other page requires you to approve that site explicitly.
+
+## Enabling real data
+
+Settings › **Data providers** › **Enable** next to DexScreener. Firefox asks once for
+permission to contact `api.dexscreener.com` — that origin only. Demo data switches itself
+off at the same time so live and placeholder figures are never mixed.
+
+Then press **Test**. It fetches a known token and prints the live status, timing, the
+response's keys and what the translator made of them. The endpoint and field names were
+written from DexScreener's documentation without a live check, so **if a scan shows
+`Unknown` where the site shows a number, paste the Test output** — a wrong field name is
+a one-line fix once the real shape is visible.
+
+What DexScreener fills: identity, market and social. Holders, contract safety and deployer
+activity still need their own providers ([roadmap](docs/ROADMAP.md)); until then those
+risk checks read *Unable to verify* and are excluded from the score rather than assumed safe.
 
 ## Keep it open: sidebar mode
 

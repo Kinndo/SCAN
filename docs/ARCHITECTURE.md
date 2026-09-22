@@ -33,6 +33,25 @@ The background owns scan state because a Firefox popup is destroyed when it lose
 A scan started before the popup closes keeps running, and reopening re-renders instantly
 from `SCAN_UPDATE`/`SCAN_COMPLETE` replayed over the `scan` port.
 
+### Resolution before fan-out
+
+Pages hand over pool addresses (Axiom, DexScreener, DEXTools routes) or addresses of
+unknown chain (a pasted `0x…`). `runScan` therefore asks the registry's **resolvers** —
+providers exposing `resolve(target)` — to turn the target into a token on a known chain
+*before* any stage runs, so every provider, cache key and the header agree on the token.
+The result is cached for a day (a pool's base token never changes) and recorded on the
+snapshot as `identity.resolvedBy`, `resolvedFrom` and `pairAddress`. If nothing resolves,
+the scan proceeds with the address as given and the kind stays honest.
+
+### Switching providers on
+
+Every provider answers `isConfigured(config)` from `providerConfig` in local storage
+(Settings › Data providers). The mock is on unless `demoData === false`; a real provider
+is on when the user has enabled it, which also requests its API origin from Firefox and
+switches demo data off. A provider may also expose `test(ctx)` — a self-diagnostic the
+Settings page runs against a known token, returning live status, timing and response
+keys. That is the verification path for providers written without network access.
+
 ## The TokenSnapshot contract
 
 Every metric is either `null` (unknown) or `{ value, source, confidence, asOf }`. There is

@@ -12,15 +12,17 @@ import { detectFromUrl, rankCandidates, isSupportedSite } from '../core/detect.j
 import { inferChainFromAddress, normalizeAddress, isNonTokenAddress } from '../utils/validation.js';
 import { registry } from '../services/providerRegistry.js';
 import { createMockProvider } from '../services/providers/mockProvider.js';
+import { createDexScreenerProvider } from '../services/providers/dexscreenerProvider.js';
 import { runScan } from '../services/marketData.js';
 import { TtlCache } from '../utils/caching.js';
 import { getSettings, getProviderConfig, setLastScan, getLastScan, cacheStore } from '../storage/storage.js';
 
 const ext = globalThis.browser ?? globalThis.chrome;
 
-// PHASE 1: the demo provider is the only one registered. Adding a real source
-// is one register() call - see services/providers/httpProvider.template.js.
+// Providers. Each decides from providerConfig (Settings > Data providers)
+// whether it is switched on; the registry only offers configured ones.
 registry.register(createMockProvider());
+registry.register(createDexScreenerProvider());
 
 const cache = new TtlCache(cacheStore);
 
@@ -235,6 +237,44 @@ export async function startScan(target) {
 }
 
 // --------------------------------------------------------------------------
+// Provider management (Settings page)
+// --------------------------------------------------------------------------
+
+async function describeProviders() {
+  const config = await getProviderConfig();
+  return {
+    demoData: config.demoData !== false,
+    providers: registry.list().map((p) => ({
+      id: p.id,
+      label: p.label,
+      stages: p.stages,
+      chains: p.chains,
+      requiresKey: Boolean(p.requiresKey),
+      isMock: Boolean(p.isMock),
+      origins: p.origins || [],
+      canResolve: typeof p.resolve === 'function',
+      configured: registry.isUsable(p, config),
+      testable: typeof p.test === 'function',
+    })),
+  };
+}
+
+/** Run a provider's own diagnostic against a known token and report raw facts. */
+async function testProvider(id) {
+  const provider = registry.get(id);
+  if (!provider) return { ok: false, error: `Unknown provider: ${id}` };
+  if (typeof provider.test !== 'function') return { ok: false, error: `${provider.label} has no self-test` };
+  const config = await getProviderConfig();
+  const started = Date.now();
+  try {
+    const result = await provider.test({ config });
+    return { provider: id, ranAt: new Date().toISOString(), ...result };
+  } catch (err) {
+    return { provider: id, ok: false, ms: Date.now() - started, error: String((err && err.message) || err) };
+  }
+}
+
+// --------------------------------------------------------------------------
 // Messaging
 // --------------------------------------------------------------------------
 
@@ -267,9 +307,9 @@ ext.runtime.onMessage.addListener((message) => {
     case 'GET_LAST_SCAN':
       return getLastScan();
     case 'PROVIDERS':
-      return Promise.resolve({
-        providers: registry.list().map((p) => ({ id: p.id, label: p.label, stages: p.stages, requiresKey: p.requiresKey, isMock: Boolean(p.isMock) })),
-      });
+      return describeProviders();
+    case 'PROVIDER_TEST':
+      return testProvider(message.id);
     default:
       return undefined;
   }

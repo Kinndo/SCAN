@@ -78,12 +78,27 @@
 
     <section class="panel">
       <h2>Data providers</h2>
-      <div id="providers" class="provider-list"></div>
+      <label class="check-row">
+        <input id="demoData" type="checkbox" />
+        Use demo data (placeholder values, labelled DEMO DATA in the panel)
+      </label>
       <p class="hint">
-        Phase 1 ships with a built-in demo provider only - every figure it produces is placeholder data and is
-        labelled DEMO DATA in the popup. Real providers are added by registering a module in
-        <code>src/services/providers/</code>. API keys belong in this page (stored locally in
-        <code>browser.storage.local</code>), never in the source code.
+        Demo data switches itself off when you enable a real provider. Leaving both on mixes live figures with
+        placeholders, which is worse than either alone.
+      </p>
+      <div id="providers" class="provider-list"></div>
+      <div id="provider-test" class="test-box" hidden>
+        <div class="test-head">
+          <span id="provider-test-title">Test result</span>
+          <button id="btn-copy-test" class="icon-btn" type="button">Copy</button>
+        </div>
+        <pre id="provider-test-output"></pre>
+      </div>
+      <p class="hint">
+        Enabling a provider asks Firefox for permission to contact that API only. <strong>Test</strong> fetches a
+        known token and shows the live status, timing and response keys - paste that output when reporting a
+        problem. API keys, where a provider needs one, are stored locally in
+        <code>browser.storage.local</code> and never in the source code.
       </p>
     </section>
 

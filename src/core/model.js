@@ -60,7 +60,9 @@ export function emptySnapshot(identity = {}) {
       decimals: null,
       pairAddress: null,
       dexId: null,
-      identitySource: null, // 'page' when the name/ticker was read off the page
+      identitySource: null, // 'page' when the name/ticker was read off the page, else the provider id
+      resolvedBy: null, // provider that turned a pair/pool/unknown address into this token
+      resolvedFrom: null, // the address the page gave us, when it was not the token itself
     },
     market: {
       priceUsd: null,

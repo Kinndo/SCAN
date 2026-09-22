@@ -3,7 +3,7 @@
  * and is read by the background on the next scan.
  */
 
-import { getSettings, saveSettings, resetSettings, clearAllLocalData } from '../storage/storage.js';
+import { getSettings, saveSettings, resetSettings, clearAllLocalData, getProviderConfig, saveProviderConfig } from '../storage/storage.js';
 import { DEFAULT_OPPORTUNITY_WEIGHTS, DEFAULT_RISK_WEIGHTS, PROFILE_PRESETS, applyProfile } from '../scoring/config.js';
 import { CHAIN_IDS, CHAINS } from '../core/constants.js';
 
@@ -39,6 +39,8 @@ async function init() {
   populate();
 
   $('btn-save').addEventListener('click', onSave);
+  $('demoData').addEventListener('change', onDemoToggle);
+  $('btn-copy-test').addEventListener('click', copyTestOutput);
   $('btn-reset').addEventListener('click', onReset);
   $('btn-clear').addEventListener('click', onClear);
   for (const btn of document.querySelectorAll('.profile-btn')) {
@@ -86,35 +88,123 @@ function buildWeights(containerId, defaults, group) {
 async function buildProviders() {
   const box = $('providers');
   box.textContent = '';
-  let providers = [];
+  let info = { demoData: true, providers: [] };
   try {
-    const res = await ext.runtime.sendMessage({ type: 'PROVIDERS' });
-    providers = (res && res.providers) || [];
+    info = await ext.runtime.sendMessage({ type: 'PROVIDERS' });
   } catch {
-    providers = [];
+    /* background unavailable */
   }
-  if (!providers.length) {
-    box.append(rowEl('No providers registered.', ''));
+  $('demoData').checked = info.demoData !== false;
+
+  const real = (info.providers || []).filter((p) => !p.isMock);
+  if (!real.length) {
+    box.append(rowEl('No data providers registered.', ''));
     return;
   }
-  for (const p of providers) {
-    box.append(rowEl(`${p.label} - stages: ${p.stages.join(', ')}`, p.isMock ? 'DEMO DATA' : p.requiresKey ? 'NEEDS KEY' : 'LIVE'));
+  for (const p of real) {
+    const row = document.createElement('div');
+    row.className = 'provider';
+
+    const main = document.createElement('div');
+    main.className = 'provider-main';
+    const name = document.createElement('span');
+    name.className = 'provider-name';
+    name.textContent = p.label;
+    const sub = document.createElement('span');
+    sub.className = 'provider-sub';
+    sub.textContent = `${p.stages.join(', ')}${p.canResolve ? ' + pair\u2192token' : ''} \u00b7 ${p.chains === '*' ? 'all chains' : p.chains.join(', ')}${p.requiresKey ? ' \u00b7 needs key' : ' \u00b7 no key'}`;
+    main.append(name, sub);
+
+    const tag = document.createElement('span');
+    tag.className = `provider-tag ${p.configured ? 'live' : 'off'}`;
+    tag.textContent = p.configured ? 'ON' : 'OFF';
+
+    const actions = document.createElement('div');
+    actions.className = 'provider-actions';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'icon-btn';
+    toggle.textContent = p.configured ? 'Disable' : 'Enable';
+    toggle.addEventListener('click', () => (p.configured ? disableProvider(p) : enableProvider(p)));
+    actions.append(toggle);
+    if (p.testable) {
+      const test = document.createElement('button');
+      test.type = 'button';
+      test.className = 'icon-btn';
+      test.textContent = 'Test';
+      test.addEventListener('click', () => runProviderTest(p));
+      actions.append(test);
+    }
+
+    row.append(main, tag, actions);
+    box.append(row);
   }
 }
 
-function rowEl(text, tag) {
-  const node = document.createElement('div');
-  node.className = 'provider';
-  const left = document.createElement('span');
-  left.textContent = text;
-  node.append(left);
-  if (tag) {
-    const right = document.createElement('span');
-    right.className = 'provider-tag';
-    right.textContent = tag;
-    node.append(right);
+/**
+ * Enabling a real provider: ask Firefox for that API's origin (must run from a
+ * click), record it, and switch demo data off so figures are never mixed.
+ */
+async function enableProvider(p) {
+  let granted = true;
+  if (p.origins && p.origins.length) {
+    try {
+      granted = await ext.permissions.request({ origins: p.origins });
+    } catch (err) {
+      flash(`Permission request failed: ${String((err && err.message) || err)}`);
+      return;
+    }
   }
-  return node;
+  if (!granted) {
+    flash(`${p.label} not enabled - permission was declined.`);
+    return;
+  }
+  const config = await getProviderConfig();
+  config[p.id] = { ...(config[p.id] || {}), enabled: true };
+  config.demoData = false;
+  await saveProviderConfig(config);
+  flash(`${p.label} enabled. Demo data switched off.`);
+  await buildProviders();
+}
+
+async function disableProvider(p) {
+  const config = await getProviderConfig();
+  config[p.id] = { ...(config[p.id] || {}), enabled: false };
+  await saveProviderConfig(config);
+  flash(`${p.label} disabled.`);
+  await buildProviders();
+}
+
+async function runProviderTest(p) {
+  const box = $('provider-test');
+  const out = $('provider-test-output');
+  $('provider-test-title').textContent = `${p.label} \u00b7 testing\u2026`;
+  out.textContent = '';
+  box.hidden = false;
+  let result;
+  try {
+    result = await ext.runtime.sendMessage({ type: 'PROVIDER_TEST', id: p.id });
+  } catch (err) {
+    result = { ok: false, error: String((err && err.message) || err) };
+  }
+  $('provider-test-title').textContent = `${p.label} \u00b7 ${result && result.ok ? 'OK' : 'FAILED'}${result && result.ms != null ? ` \u00b7 ${result.ms}ms` : ''}`;
+  out.textContent = JSON.stringify(result, null, 2);
+}
+
+async function onDemoToggle() {
+  const config = await getProviderConfig();
+  config.demoData = $('demoData').checked;
+  await saveProviderConfig(config);
+  flash(config.demoData ? 'Demo data on.' : 'Demo data off.');
+}
+
+async function copyTestOutput() {
+  try {
+    await navigator.clipboard.writeText($('provider-test-output').textContent);
+    flash('Test output copied.');
+  } catch {
+    flash('Copy failed - select the text and copy it manually.');
+  }
 }
 
 function populate() {

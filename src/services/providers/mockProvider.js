@@ -217,7 +217,10 @@ export function createMockProvider(options = {}) {
     stages: ['identity', 'market', 'holders', 'contract', 'dev', 'social'],
     requiresKey: false,
     isMock: true,
-    isConfigured: () => true,
+    // On by default so a fresh install shows something; switched off in
+    // Settings the moment a real provider is enabled, because mixing live
+    // figures with placeholders would be worse than either alone.
+    isConfigured: (config = {}) => config.demoData !== false,
 
     async fetch(stage, target) {
       const delay = (STAGE_LATENCY[stage] ?? 100) * latencyFactor;

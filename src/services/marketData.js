@@ -38,8 +38,24 @@ export async function runScan(target, deps = {}) {
   if (!registry) throw new Error('runScan requires a provider registry');
   if (!target || !target.address) throw new Error('runScan requires a target address');
 
-  let snapshot = emptySnapshot(target);
+  // A page usually hands us a pool address (Axiom, DexScreener, DEXTools) or an
+  // address of unknown chain (a pasted 0x...). Everything downstream - other
+  // providers, cache keys, the header - needs the token itself, so resolve
+  // first. Resolution is cached for a day: a pool's base token does not change.
+  const resolution = needsResolution(target)
+    ? await resolveTarget(target, { registry, cache, config, signal })
+    : null;
+  const resolvedTarget = resolution
+    ? { ...target, address: resolution.address, chain: resolution.chain ?? target.chain, addressKind: 'token' }
+    : target;
+
+  let snapshot = emptySnapshot(resolvedTarget);
   snapshot.meta.fetchedAt = now;
+  if (resolution) {
+    snapshot.identity.pairAddress = resolution.pairAddress ?? null;
+    snapshot.identity.resolvedBy = resolution.resolvedBy ?? null;
+    snapshot.identity.resolvedFrom = resolution.resolvedFrom ?? target.address;
+  }
 
   // Identity read from the page before the scan started. It is a hint, not a
   // provider result, so it is tagged as such and any provider that can return
@@ -61,15 +77,16 @@ export async function runScan(target, deps = {}) {
   };
 
   const stages = deps.stages ?? STAGES;
-  const unserved = registry.unservedStages(stages, target.chain, config);
+  const unserved = registry.unservedStages(stages, resolvedTarget.chain, config);
   for (const stage of unserved) {
     recordError(snapshot, stage, 'No data provider available for this stage on this chain.');
   }
+  if (resolution) emit('resolve');
 
   const pending = stages
     .filter((stage) => !unserved.includes(stage))
     .map((stage) =>
-      fetchStage(stage, target, { registry, cache, config, signal })
+      fetchStage(stage, resolvedTarget, { registry, cache, config, signal })
         .then((result) => {
           if (signal && signal.aborted) return;
           if (result && result.patch) {
@@ -97,6 +114,26 @@ export async function runScan(target, deps = {}) {
   const analysis = analyze(snapshot, { settings, now: Date.now() });
   emit('done', true);
   return { snapshot, analysis };
+}
+
+export function needsResolution(target) {
+  const kind = target.addressKind || 'token';
+  return kind !== 'token' || !target.chain || target.chain === 'unknown';
+}
+
+async function resolveTarget(target, { registry, cache, config, signal }) {
+  for (const provider of registry.resolvers(target.chain, config)) {
+    if (signal && signal.aborted) return null;
+    try {
+      const key = cacheKey(`resolve:${provider.id}`, target.chain, `${target.addressKind || 'token'}:${target.address}`);
+      const run = () => provider.resolve(target, { config, signal });
+      const result = cache ? (await cache.wrap(key, TTL.identity, run)).value : await run();
+      if (result && result.address) return result;
+    } catch {
+      // A resolver that fails is skipped; the scan proceeds with what it has.
+    }
+  }
+  return null;
 }
 
 async function fetchStage(stage, target, { registry, cache, config, signal }) {
