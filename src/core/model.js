@@ -54,7 +54,7 @@ export function emptySnapshot(identity = {}) {
     identity: {
       chain: identity.chain ?? 'unknown',
       address: identity.address ?? null,
-      addressKind: identity.addressKind ?? 'token', // token | pair | pool
+      addressKind: identity.addressKind ?? 'token', // token | pair | pool | unknown
       symbol: null,
       name: null,
       decimals: null,

@@ -31,8 +31,11 @@ Before writing a provider, verify against live responses. The seams are already 
    liquidity, volume and transaction counts across m5/h1/h6/h24 windows, plus pool creation
    time for token age.
 3. **Resolve pair/pool addresses to tokens.** DexScreener and DEXTools routes carry a *pair*
-   address; the snapshot already carries `addressKind` for this, and a provider must do the
-   lookup.
+   address; Axiom's `/meme/<addr>` route does not say which it is, so it is reported as
+   `addressKind: 'unknown'`. A resolver should try the address as a token first, then as a
+   pair, and write the answer back into `identity.address` / `identity.pairAddress`. Until
+   that exists, the popup states plainly that the target is unresolved rather than implying
+   it is the mint.
 4. **Holder provider** → `holders`. Top-10/20 concentration, largest non-LP holder, holder
    count over time. Distinguishing an AMM vault from a human whale is the hard part — until
    it is solved, report `largestPct` and leave `largestNonLpPct` null rather than guessing.

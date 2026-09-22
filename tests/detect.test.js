@@ -20,7 +20,7 @@ test('site URL adapters extract chain, address and address kind', () => {
     [`https://gmgn.ai/sol/token/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'token', site: 'gmgn' }],
     [`https://www.dextools.io/app/en/ether/pair-explorer/${EVM}`, { chain: 'ethereum', address: EVM.toLowerCase(), addressKind: 'pair', site: 'dextools' }],
     [`https://photon-sol.tinyastro.io/en/lp/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'pool', site: 'photon' }],
-    [`https://axiom.trade/meme/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'token', site: 'axiom' }],
+    [`https://axiom.trade/meme/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'unknown', site: 'axiom' }],
     [`https://solscan.io/token/${SOL}`, { chain: 'solana', address: SOL, addressKind: 'token', site: 'solscan' }],
     [`https://etherscan.io/token/${EVM}`, { chain: 'ethereum', address: EVM.toLowerCase(), addressKind: 'token', site: 'evm-explorer' }],
     [`https://basescan.org/token/${EVM}`, { chain: 'base', address: EVM.toLowerCase(), addressKind: 'token', site: 'evm-explorer' }],
@@ -75,4 +75,33 @@ test('an address seen in several places outranks one seen once', () => {
   ]);
   assert.equal(ranked[0].address, SOL);
   assert.deepEqual(ranked[0].origins.sort(), ['attribute', 'meta', 'text']);
+});
+
+
+/**
+ * Pinned against a real URL copied from the browser. Axiom carries the chain in
+ * the query string and is multi-chain, and its /meme/ route does not state
+ * whether the address is the mint or the pool - so the kind is reported as
+ * unknown rather than guessed.
+ */
+test('the real Axiom URL is parsed exactly', () => {
+  const url = 'https://axiom.trade/meme/4X9MJ1NgmNvSKuCbf9LC5QgDdYuyQTQcA1tz6JNv4ryR'
+    + '?chain=sol&chains=sol&pulseChains=sol&trackerChains=sol,robinhood,bnb,eth&discoverChains=sol';
+  const got = detectFromUrl(url);
+  assert.deepEqual(got, {
+    address: '4X9MJ1NgmNvSKuCbf9LC5QgDdYuyQTQcA1tz6JNv4ryR',
+    chain: 'solana',
+    addressKind: 'unknown',
+    site: 'axiom',
+    method: 'url',
+  });
+});
+
+test('Axiom reads its chain from the query string rather than assuming Solana', () => {
+  const evm = '0x6982508145454ce325ddbe47a25d4ec3d2311933';
+  assert.equal(detectFromUrl(`https://axiom.trade/meme/${evm}?chain=eth`).chain, 'ethereum');
+  assert.equal(detectFromUrl(`https://axiom.trade/meme/${evm}?chain=bnb`).chain, 'bsc');
+  // Chain and address family must agree or the match is discarded.
+  assert.equal(detectFromUrl(`https://axiom.trade/meme/${evm}?chain=sol`), null);
+  assert.equal(detectFromUrl(`https://axiom.trade/meme/${SOL}?chain=eth`), null);
 });

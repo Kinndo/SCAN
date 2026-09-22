@@ -114,8 +114,13 @@ function renderDetectPreview(result) {
       : 'Detected from page content';
     const addr = el('div', 'detect-token', result.address);
     const chainLabel = (CHAINS[result.chain] || CHAINS.unknown).label;
+    const kindNote = result.addressKind === 'token'
+      ? ''
+      : result.addressKind === 'unknown'
+        ? ' - this route does not say whether the address is the mint or the pool'
+        : ` - this is a ${result.addressKind} address, not the token contract`;
     const sub = el('div', 'detect-source',
-      `${chainLabel}${result.addressKind !== 'token' ? ` - ${result.addressKind} address` : ''}` +
+      `${chainLabel}${kindNote}` +
       `${result.confidence === 'ambiguous' ? ' - several candidates found, verify before trusting' : ''}`);
     box.append(label, addr, sub);
     $('btn-scan').disabled = false;
@@ -255,7 +260,13 @@ function render() {
   $('footer-time').textContent = state.scanning ? 'scanning…' : formatRelativeTime(a.generatedAt, Date.now());
 }
 
-/** "axiom - url - pool": where the address came from, and what kind it is.
+const KIND_LABELS = {
+  pair: 'pair address',
+  pool: 'pool address',
+  unknown: 'unresolved address',
+};
+
+/** "axiom - url - pool address": where the address came from, and what it is.
  *  Lets you check at a glance that the scan is pointed at the right thing. */
 function describeSource(target, identity) {
   if (!target) return '--';
@@ -263,7 +274,7 @@ function describeSource(target, identity) {
   if (target.site && target.site !== 'generic') parts.push(target.site);
   if (target.method) parts.push(target.method === 'dom' ? 'page scan' : target.method);
   const kind = identity && identity.addressKind;
-  if (kind && kind !== 'token') parts.push(kind);
+  if (kind && kind !== 'token') parts.push(KIND_LABELS[kind] ?? kind);
   return parts.length ? parts.join(' \u00b7 ') : '--';
 }
 
