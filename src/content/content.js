@@ -21,7 +21,7 @@
     error: null,
   };
   try {
-    result.candidates = adapter.collectCandidates();
+    const rawCandidates = adapter.collectCandidates();
     result.pageMetrics = adapter.extractVisibleMetrics();
     result.identityHints = adapter.extractIdentityHints();
 
@@ -38,9 +38,20 @@
       };
     }
 
+    // With a ticker in hand, the address sitting next to it on the page beats
+    // every other candidate. This is how a feed page resolves to the token
+    // that is actually selected rather than to any row in the list.
+    const ticker = result.identityHints ? result.identityHints.symbolHint : null;
+    const nearTicker = adapter.boostNearTicker(rawCandidates, ticker);
+    result.candidates = [...adapter.stripElements(rawCandidates), ...nearTicker];
+
     try {
       result.debug = adapter.collectDebug();
-      if (result.debug) result.debug.siteAdapter = fromSite ? fromSite.site : null;
+      if (result.debug) {
+        result.debug.siteAdapter = fromSite ? fromSite.site : null;
+        result.debug.candidateCount = rawCandidates.length;
+        result.debug.nearTicker = nearTicker.map((c) => c.address);
+      }
     } catch {
       result.debug = null;
     }

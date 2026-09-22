@@ -117,6 +117,9 @@ export async function detectToken(windowId = null) {
     if (ranked.length) {
       const best = ranked[0];
       const family = inferChainFromAddress(best.address);
+      // A tie at the top means the page lists several tokens and nothing
+      // singles one out. That is reported, never resolved by guessing.
+      const ambiguous = ranked.length > 1 && ranked[1].score >= best.score;
       return {
         ok: true,
         address: best.address,
@@ -124,8 +127,9 @@ export async function detectToken(windowId = null) {
         addressKind: 'token',
         site: 'generic',
         method: 'dom',
-        confidence: ranked.length > 1 && ranked[1].score >= best.score ? 'ambiguous' : 'ranked',
-        alternatives: ranked.slice(1, 4).map((c) => c.address),
+        confidence: ambiguous ? 'ambiguous' : 'ranked',
+        matchedTicker: best.origins.includes('near-ticker'),
+        candidates: ranked.slice(0, 8).map((c) => ({ address: c.address, score: c.score, origins: c.origins })),
         pageMetrics: pageResult.pageMetrics || {},
         identityHints: pageResult.identityHints || {},
         pageDebug: pageResult.debug || null,

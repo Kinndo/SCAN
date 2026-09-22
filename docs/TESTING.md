@@ -98,6 +98,11 @@ one into the popup's manual-entry box to reach that UI state deliberately:
 16. Turn off "Scan automatically" in Settings. Navigating to a new coin should now show
     the detected token with a SCAN button, and wait for you.
 17. Restart Firefox. The sidebar should reopen on its own.
+18. Open a **feed** page (Axiom Pulse, a trending list) and select a token there. The URL
+    carries no address on such pages, so the panel reads the page. Either it matches the
+    selected token's ticker to an address ("Matched to $TICKER on the page") and scans,
+    or it shows a **candidate picker** and waits. It must never auto-scan a token it
+    could not single out - if it does, that is a bug.
 
 **Settings**
 

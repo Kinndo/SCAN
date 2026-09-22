@@ -75,7 +75,10 @@ export async function runScan(target, deps = {}) {
           if (result && result.patch) {
             snapshot = mergeSnapshot(snapshot, result.patch);
             markStageComplete(snapshot, stage, result.providerId);
-            if (result.cached) snapshot.meta.sources.push(`${result.providerId}:cached`);
+            if (result.cached) {
+              const tag = `${result.providerId}:cached`;
+              if (!snapshot.meta.sources.includes(tag)) snapshot.meta.sources.push(tag);
+            }
           } else if (result && result.empty) {
             recordEmpty(snapshot, stage);
           } else {

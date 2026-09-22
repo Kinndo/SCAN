@@ -29,6 +29,9 @@ export function isSidebarView(ext, win) {
 /** Should the sidebar start a scan for what it just detected? */
 export function shouldRescan(prevAddress, detection, settings) {
   if (!detection || !detection.ok || !detection.address) return false;
+  // Several tokens on the page and nothing singling one out: show the choice,
+  // do not scan whichever sorted first.
+  if (detection.confidence === 'ambiguous') return false;
   if (!settings || settings.autoScanInSidebar === false) return false;
   return detection.address !== prevAddress;
 }

@@ -9,8 +9,8 @@
 globalThis.ScanDomAdapter = (function () {
   const base = globalThis.ScanContentBase;
 
-  function push(out, address, origin, chain) {
-    if (base.isAddress(address)) out.push({ address, origin, chain: chain || null });
+  function push(out, address, origin, el) {
+    if (base.isAddress(address)) out.push({ address, origin, chain: null, el: el || null });
   }
 
   function fromUrl(out) {
@@ -19,20 +19,20 @@ globalThis.ScanDomAdapter = (function () {
 
   function fromCanonical(out) {
     document.querySelectorAll('link[rel="canonical"]').forEach((el) => {
-      base.scanText(el.getAttribute('href') || '').forEach((a) => push(out, a, 'canonical'));
+      base.scanText(el.getAttribute('href') || '').forEach((a) => push(out, a, 'canonical', el));
     });
   }
 
   function fromMeta(out) {
     const sel = 'meta[property^="og:"], meta[name^="twitter:"], meta[name="description"]';
     document.querySelectorAll(sel).forEach((el) => {
-      base.scanText(el.getAttribute('content') || '').forEach((a) => push(out, a, 'meta'));
+      base.scanText(el.getAttribute('content') || '').forEach((a) => push(out, a, 'meta', el));
     });
   }
 
   function fromJsonLd(out) {
     document.querySelectorAll('script[type="application/ld+json"]').forEach((el) => {
-      base.scanText((el.textContent || '').slice(0, 20000)).forEach((a) => push(out, a, 'jsonld'));
+      base.scanText((el.textContent || '').slice(0, 20000)).forEach((a) => push(out, a, 'jsonld', el));
     });
   }
 
@@ -41,16 +41,18 @@ globalThis.ScanDomAdapter = (function () {
     document.querySelectorAll(sel).forEach((el) => {
       for (const attr of el.attributes) {
         if (!/^data-/.test(attr.name)) continue;
-        base.scanText(attr.value).forEach((a) => push(out, a, 'attribute'));
+        base.scanText(attr.value).forEach((a) => push(out, a, 'attribute', el));
       }
     });
   }
 
   function fromLinks(out) {
-    // Explorer links are a strong hint even on unsupported sites.
-    const sel = 'a[href*="solscan.io"],a[href*="etherscan.io"],a[href*="basescan.org"],a[href*="bscscan.com"],a[href*="dexscreener.com"],a[href*="birdeye.so"],a[href*="pump.fun"]';
+    // Explorer and trading-site links are a strong hint even on unsupported
+    // sites, and a feed page links every one of its rows to a token.
+    const sel = 'a[href*="solscan.io"],a[href*="etherscan.io"],a[href*="basescan.org"],a[href*="bscscan.com"],'
+      + 'a[href*="dexscreener.com"],a[href*="birdeye.so"],a[href*="pump.fun"],a[href*="/meme/"],a[href*="/token/"],a[href*="/coin/"]';
     document.querySelectorAll(sel).forEach((el) => {
-      base.scanText(el.getAttribute('href') || '').forEach((a) => push(out, a, 'link'));
+      base.scanText(el.getAttribute('href') || '').forEach((a) => push(out, a, 'link', el));
     });
   }
 
@@ -71,6 +73,41 @@ globalThis.ScanDomAdapter = (function () {
       }
     }
     return out;
+  }
+
+  /**
+   * On a feed page every row carries a token address, so a plain scan finds
+   * dozens and cannot say which one the page is showing. But the SELECTED
+   * token's ticker is on screen, and an address that sits inside the same
+   * small container as that ticker is almost certainly its address. Such
+   * candidates get a 'near-ticker' origin, which outranks every other
+   * page-derived origin (see CANDIDATE_WEIGHTS in core/detect.js).
+   */
+  function boostNearTicker(candidates, ticker) {
+    if (!ticker || typeof ticker !== 'string') return [];
+    const escaped = ticker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, 'i');
+    const out = [];
+    const seen = new Set();
+    for (const c of candidates) {
+      if (!c.el || seen.has(c.address)) continue;
+      let node = c.el;
+      for (let depth = 0; node && depth < 4; depth += 1, node = node.parentElement) {
+        const text = node.textContent || '';
+        if (text.length > 1500) break; // a container that big is not "adjacent"
+        if (re.test(text)) {
+          out.push({ address: c.address, origin: 'near-ticker', chain: null });
+          seen.add(c.address);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Element references cannot cross the executeScript boundary. */
+  function stripElements(candidates) {
+    return candidates.map(({ address, origin, chain }) => ({ address, origin, chain }));
   }
 
   /**
@@ -231,6 +268,7 @@ globalThis.ScanDomAdapter = (function () {
     const slashLines = lines
       .filter((l) => /\/\s*(?:SOL|USD|USDC|USDT|ETH|WETH|BNB)\b/i.test(l))
       .slice(0, 12);
+    const buyLines = lines.filter((l) => /^Buy\s+\S+$/.test(l)).slice(0, 6);
     return {
       title: document.title || null,
       ogTitle: og ? og.getAttribute('content') : null,
@@ -239,9 +277,10 @@ globalThis.ScanDomAdapter = (function () {
       bodyLineCount: lines.length,
       firstLines: lines.slice(0, 15),
       slashLines,
+      buyLines,
       hasCanvas: document.querySelectorAll('canvas').length,
     };
   }
 
-  return { collectCandidates, extractVisibleMetrics, extractIdentityHints, collectDebug, parseMoney };
+  return { collectCandidates, boostNearTicker, stripElements, extractVisibleMetrics, extractIdentityHints, collectDebug, parseMoney };
 })();

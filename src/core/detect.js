@@ -240,7 +240,10 @@ export function isSupportedSite(rawUrl) {
  * Rank candidates gathered from the DOM by the content script. URL beats
  * canonical link beats meta tag beats copy-button beats body text.
  */
-export const CANDIDATE_WEIGHTS = { url: 100, canonical: 80, meta: 70, jsonld: 65, attribute: 55, link: 40, text: 20 };
+// 'near-ticker' is an address found inside the same small container as the
+// page's identified ticker - the strongest page-derived evidence there is,
+// second only to the URL itself.
+export const CANDIDATE_WEIGHTS = { url: 100, 'near-ticker': 90, canonical: 80, meta: 70, jsonld: 65, attribute: 55, link: 40, text: 20 };
 
 export function rankCandidates(candidates = []) {
   const byAddress = new Map();

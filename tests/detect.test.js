@@ -105,3 +105,15 @@ test('Axiom reads its chain from the query string rather than assuming Solana', 
   assert.equal(detectFromUrl(`https://axiom.trade/meme/${evm}?chain=sol`), null);
   assert.equal(detectFromUrl(`https://axiom.trade/meme/${SOL}?chain=eth`), null);
 });
+
+test('an address found next to the page\'s ticker outranks any number of feed rows', () => {
+  const feed = ['A1zXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB26', 'B1zXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB26', 'C1zXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB26'];
+  // Every feed row is a link plus a data attribute plus body text - a three-way tie.
+  const tied = feed.flatMap((a) => [{ address: a, origin: 'link' }, { address: a, origin: 'attribute' }, { address: a, origin: 'text' }]);
+  const before = rankCandidates(tied);
+  assert.ok(before[1].score >= before[0].score, 'without a ticker match the feed is a tie');
+
+  const after = rankCandidates([...tied, { address: feed[1], origin: 'near-ticker' }]);
+  assert.equal(after[0].address, feed[1]);
+  assert.ok(after[0].score > after[1].score, 'the ticker-adjacent address must win outright');
+});

@@ -37,6 +37,24 @@ globalThis.ScanSiteAdapters = (function () {
     return plausibleName(next) ? next : null;
   }
 
+  const QUOTE_WORDS = new Set(['sol', 'usd', 'usdc', 'usdt', 'eth', 'bnb', 'weth', 'wsol', 'now', 'more', 'token']);
+
+  /**
+   * The selected token's buy button reads "Buy <TICKER>" (observed: "Buy
+   * Nuts", "Buy VLOOONG", "Buy Tempura", "Buy PUMPPHIL"). The bare "Buy" tab
+   * does not match, and quote currencies are excluded.
+   */
+  function buyButtonTicker(lines) {
+    for (const line of lines) {
+      const m = line.match(/^Buy\s+\$?([A-Za-z0-9_.-]{1,24})$/);
+      if (!m) continue;
+      const t = m[1];
+      if (NUMBERISH.test(t) || QUOTE_WORDS.has(t.toLowerCase())) continue;
+      return t;
+    }
+    return null;
+  }
+
   const SITES = [
     {
       id: 'axiom',
@@ -48,13 +66,21 @@ globalThis.ScanSiteAdapters = (function () {
       // og:title is just "Axiom" and is useless.
       identity() {
         const title = document.title || '';
+        const lines = textLines();
         const m = title.match(
           /^\s*([A-Za-z0-9_.-]{1,24})\s+(?:[↑↓→↗↘]\s*)?\$[\d.,]+\s*[KMBT]?\s*\|\s*Axiom\b/i,
         );
-        if (!m) return null;
-        const symbol = m[1];
-        if (NUMBERISH.test(symbol)) return null;
-        return { symbol, name: nameAfterTicker(symbol, textLines()), source: 'axiom title' };
+        let symbol = m && !NUMBERISH.test(m[1]) ? m[1] : null;
+        let source = 'axiom title';
+        if (!symbol) {
+          // Feed pages ("Axiom SOL | Pulse") keep the ticker out of the title,
+          // and token pages have a bare "Axiom" title for a moment after an
+          // in-app navigation. The buy button covers both.
+          symbol = buyButtonTicker(lines);
+          source = 'axiom buy button';
+        }
+        if (!symbol) return null;
+        return { symbol, name: nameAfterTicker(symbol, lines), source };
       },
     },
   ];
@@ -73,5 +99,5 @@ globalThis.ScanSiteAdapters = (function () {
     return null;
   }
 
-  return { SITES, identityFor, nameAfterTicker, plausibleName };
+  return { SITES, identityFor, nameAfterTicker, buyButtonTicker, plausibleName };
 })();

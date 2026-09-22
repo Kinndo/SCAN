@@ -8,7 +8,7 @@
  */
 
 import { formatUsd, formatPercent, formatAge, formatRelativeTime, shortenAddress, isMissing } from '../utils/formatting.js';
-import { validateManualInput } from '../utils/validation.js';
+import { validateManualInput, inferChainFromAddress } from '../utils/validation.js';
 import { pick } from '../core/model.js';
 import { CHAINS } from '../core/constants.js';
 import { getSettings } from '../storage/storage.js';
@@ -239,10 +239,16 @@ function renderDetectPreview(result) {
   const box = $('detect-preview');
   box.textContent = '';
   const label = el('div', 'detect-label');
+  if (result && result.ok && result.confidence === 'ambiguous') {
+    renderCandidatePicker(box, label, result);
+    return;
+  }
   if (result && result.ok) {
     label.textContent = result.method === 'url'
       ? `Detected on ${result.site}`
-      : 'Detected from page content';
+      : result.matchedTicker && result.identityHints && result.identityHints.symbolHint
+        ? `Matched to $${result.identityHints.symbolHint} on the page`
+        : 'Detected from page content';
     const addr = el('div', 'detect-token', result.address);
     const chainLabel = (CHAINS[result.chain] || CHAINS.unknown).label;
     const kindNote = result.addressKind === 'token'
@@ -261,6 +267,48 @@ function renderDetectPreview(result) {
     box.append(label, msg);
     $('btn-scan').disabled = true;
   }
+}
+
+/**
+ * The page lists several tokens and nothing singles one out (a feed, a
+ * watchlist). Scanning whichever sorted first would be a confident wrong
+ * answer, so the choice is put to the user instead.
+ */
+function renderCandidatePicker(box, label, result) {
+  const shown = result.identityHints && result.identityHints.symbolHint;
+  const n = (result.candidates || []).length;
+  label.textContent = 'Several tokens on this page';
+  const msg = el('div', 'detect-source', shown
+    ? `This page is showing $${shown}, but SCAN could not tell which of the ${n} addresses on it belongs to that token. `
+      + 'Open the token\u2019s own page for an exact match, paste its address, or pick one below only if you know it is right.'
+    : `${n} token addresses were found on this page and none stands out. `
+      + 'Open the token\u2019s own page, paste its address, or pick one below only if you know it is right.');
+  box.append(label, msg);
+
+  const list = el('div', 'candidate-list');
+  for (const c of result.candidates || []) {
+    const row = el('button', 'candidate', shortenAddress(c.address, 6, 6));
+    row.type = 'button';
+    row.title = `${c.address}\nfound in: ${c.origins.join(', ')}`;
+    row.append(el('span', 'candidate-origin', c.origins.join(', ')));
+    row.addEventListener('click', () => scanCandidate(c.address));
+    list.append(row);
+  }
+  box.append(list);
+  $('btn-scan').disabled = true;
+}
+
+async function scanCandidate(address) {
+  const family = inferChainFromAddress(address);
+  // A hand-picked candidate is not necessarily the token the page is about,
+  // so the page's name is deliberately NOT attached to it.
+  await startScan({
+    address,
+    chain: family === 'solana' ? 'solana' : 'unknown',
+    addressKind: 'token',
+    method: 'picked',
+    identityHints: null,
+  });
 }
 
 async function onScanClick() {
@@ -403,7 +451,9 @@ function describeSource(target, identity) {
   if (!target) return '--';
   const parts = [];
   if (target.site && target.site !== 'generic') parts.push(target.site);
-  if (target.method) parts.push(target.method === 'dom' ? 'page scan' : target.method);
+  if (target.method) {
+    parts.push(target.method === 'dom' ? 'page scan' : target.method === 'picked' ? 'picked from page' : target.method);
+  }
   const kind = identity && identity.addressKind;
   if (kind && kind !== 'token') parts.push(KIND_LABELS[kind] ?? kind);
   return parts.length ? parts.join(' \u00b7 ') : '--';
@@ -600,7 +650,7 @@ async function copyDebugReport() {
     extension: (ext.runtime.getManifest && ext.runtime.getManifest().version) || null,
     tabUrl: d.tabUrl || null,
     detection: d.ok
-      ? { address: d.address, chain: d.chain, addressKind: d.addressKind, site: d.site, method: d.method, confidence: d.confidence ?? null }
+      ? { address: d.address, chain: d.chain, addressKind: d.addressKind, site: d.site, method: d.method, confidence: d.confidence ?? null, matchedTicker: d.matchedTicker ?? null, candidates: d.candidates ?? null }
       : { ok: false, reason: d.reason, message: d.message },
     identityHints: d.identityHints || null,
     page: d.pageDebug || null,

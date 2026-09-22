@@ -53,3 +53,9 @@ test('debounce collapses a burst into one trailing call', () => {
   for (const f of pending) if (f) f();
   assert.deepEqual(calls, [3]);
 });
+
+test('an ambiguous detection is never auto-scanned', () => {
+  const on = { autoScanInSidebar: true };
+  assert.equal(shouldRescan(null, { ok: true, address: 'A', confidence: 'ambiguous' }, on), false);
+  assert.equal(shouldRescan(null, { ok: true, address: 'A', confidence: 'ranked' }, on), true);
+});

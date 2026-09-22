@@ -81,3 +81,25 @@ test('nameAfterTicker takes the first exact line match, not a substring', async 
   assert.equal(nameAfterTicker('NUTS', ['NUTS']), null);
   assert.equal(nameAfterTicker('NUTS', ['NUTS', '12.5%']), null);
 });
+
+/**
+ * Verbatim from a debug report on Axiom's Pulse feed: the title carries no
+ * ticker, but the selected token's buy button does.
+ */
+test('Axiom feed page: ticker from the "Buy <TICKER>" button, name from the header', async () => {
+  const id = await identityOn('axiom.trade', 'Axiom SOL | Pulse', [
+    'Discover', 'Pulse', 'Trackers', 'SOL', 'Deposit', '9', 'Pulse', 'Create a wallet group',
+    'PUMPPHIL', 'Pump Jean Phil', '1.25%', '2m',
+    'Buy', 'Sell', 'Market', 'Limit', 'Buy PUMPPHIL', 'Bought', 'Sold',
+  ]);
+  assert.deepEqual(id, { symbol: 'PUMPPHIL', name: 'Pump Jean Phil', source: 'axiom buy button', site: 'axiom' });
+});
+
+test('Axiom: the bare "Buy" tab and "Buy SOL" never count as a ticker', async () => {
+  assert.equal(await identityOn('axiom.trade', 'Axiom SOL | Pulse', ['Buy', 'Sell', 'Buy SOL', 'Buy now']), null);
+});
+
+test('Axiom: the title still wins over the buy button when both are present', async () => {
+  const id = await identityOn('axiom.trade', 'CASHTAG ↑ $92.3K | Axiom SOL', ['CASHTAG', 'Cashtag', 'Buy CASHTAG']);
+  assert.equal(id.source, 'axiom title');
+});

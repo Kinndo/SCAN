@@ -237,3 +237,13 @@ html.sidebar #app { max-height: none; }
   font: 700 10px/1 var(--mono); letter-spacing: .8px; padding: 5px 9px; cursor: pointer;
 }
 .allow-btn:hover { background: #64adff; }
+
+/* --- candidate picker: several tokens on the page, user chooses --- */
+.candidate-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.candidate {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;
+  text-align: left; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font: 11.5px var(--mono); padding: 6px 8px; cursor: pointer;
+}
+.candidate:hover { border-color: var(--accent); }
+.candidate-origin { font-size: 9.5px; color: var(--dim); }
