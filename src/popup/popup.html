@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SCAN</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <header class="topbar">
+      <div class="brand">SCAN</div>
+      <div class="topbar-actions">
+        <button id="btn-rescan" class="icon-btn" type="button" title="Rescan" hidden>Rescan</button>
+        <button id="btn-settings" class="icon-btn" type="button" title="Settings">Settings</button>
+      </div>
+    </header>
+
+    <div id="demo-banner" class="banner banner-demo" hidden>
+      <strong>DEMO DATA</strong><span>Placeholder values from the built-in mock provider. Not live market data.</span>
+    </div>
+
+    <!-- IDLE ------------------------------------------------------------- -->
+    <section id="view-idle" class="view">
+      <div id="detect-preview" class="detect-preview">
+        <div class="detect-label">Checking this page&hellip;</div>
+      </div>
+      <button id="btn-scan" class="primary-btn" type="button">SCAN COIN</button>
+      <button id="btn-manual-toggle" class="link-btn" type="button">Enter a contract address manually</button>
+    </section>
+
+    <!-- MANUAL ENTRY ------------------------------------------------------ -->
+    <section id="view-manual" class="view" hidden>
+      <div class="manual-title">Contract address</div>
+      <input id="manual-address" class="input" type="text" spellcheck="false" autocomplete="off"
+             placeholder="Solana mint or 0x... contract" />
+      <select id="manual-chain" class="input select">
+        <option value="auto">Detect chain from address</option>
+        <option value="solana">Solana</option>
+        <option value="ethereum">Ethereum</option>
+        <option value="base">Base</option>
+        <option value="bsc">BNB Chain</option>
+        <option value="arbitrum">Arbitrum</option>
+        <option value="polygon">Polygon</option>
+        <option value="avalanche">Avalanche</option>
+      </select>
+      <div id="manual-error" class="error-text" hidden></div>
+      <button id="btn-manual-scan" class="primary-btn" type="button">SCAN</button>
+      <button id="btn-manual-cancel" class="link-btn" type="button">Back</button>
+    </section>
+
+    <!-- RESULT ------------------------------------------------------------ -->
+    <section id="view-result" class="view" hidden>
+
+      <div class="token-head">
+        <div class="token-id">
+          <div id="token-name" class="token-name">&mdash;</div>
+          <div id="token-ticker" class="token-ticker">&mdash;</div>
+        </div>
+        <div class="token-meta">
+          <span id="token-chain" class="chip">&mdash;</span>
+          <button id="token-address" class="chip chip-btn" type="button" title="Copy contract address">&mdash;</button>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><span class="metric-k">Price</span><span id="m-price" class="metric-v">&mdash;</span></div>
+        <div class="metric"><span class="metric-k">Market Cap</span><span id="m-mcap" class="metric-v">&mdash;</span></div>
+        <div class="metric"><span class="metric-k">Liquidity</span><span id="m-liq" class="metric-v">&mdash;</span></div>
+        <div class="metric"><span class="metric-k">24h Volume</span><span id="m-vol" class="metric-v">&mdash;</span></div>
+        <div class="metric"><span class="metric-k">Age</span><span id="m-age" class="metric-v">&mdash;</span></div>
+        <div class="metric"><span class="metric-k">1h Change</span><span id="m-chg" class="metric-v">&mdash;</span></div>
+      </div>
+
+      <div class="scores">
+        <button id="card-opp" class="score-card" type="button" aria-expanded="false">
+          <div class="score-label">OPPORTUNITY</div>
+          <div class="score-value"><span id="opp-score">&mdash;</span><span class="score-max">/100</span></div>
+          <div class="score-bar"><div id="opp-bar" class="score-bar-fill"></div></div>
+          <div id="opp-band" class="score-band">&mdash;</div>
+          <div class="score-hint">tap for breakdown</div>
+        </button>
+        <button id="card-risk" class="score-card" type="button" aria-expanded="false">
+          <div class="score-label">RISK</div>
+          <div class="score-value"><span id="risk-score">&mdash;</span><span class="score-max">/100</span></div>
+          <div class="score-bar"><div id="risk-bar" class="score-bar-fill"></div></div>
+          <div id="risk-band" class="score-band">&mdash;</div>
+          <div class="score-hint">tap for breakdown</div>
+        </button>
+      </div>
+
+      <div id="breakdown" class="breakdown" hidden></div>
+
+      <div class="section">
+        <div class="section-title">KEY SIGNALS</div>
+        <div id="key-signals" class="signal-rows"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">IMPORTANT SIGNALS</div>
+        <div id="alerts" class="alerts"></div>
+        <button id="btn-more-alerts" class="link-btn" type="button" hidden>Show all signals</button>
+      </div>
+
+      <div class="section two-col">
+        <div>
+          <div class="section-title">WHY?</div>
+          <ul id="why-list" class="bullets"></ul>
+        </div>
+        <div>
+          <div class="section-title">CONCERNS</div>
+          <ul id="concerns-list" class="bullets bullets-warn"></ul>
+        </div>
+      </div>
+
+      <div id="progress" class="progress"></div>
+
+      <footer class="footer">
+        <span id="footer-sources">&mdash;</span>
+        <span id="footer-time">&mdash;</span>
+      </footer>
+    </section>
+
+    <!-- ERROR / UNSUPPORTED ------------------------------------------------ -->
+    <section id="view-error" class="view" hidden>
+      <div id="error-message" class="error-box"></div>
+      <button id="btn-error-manual" class="primary-btn" type="button">Enter address manually</button>
+    </section>
+
+    <div class="disclaimer">
+      Analysis tool only. No trading, no wallet access. Scores are standardised measurements, not predictions or advice.
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

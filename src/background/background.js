@@ -1,0 +1,208 @@
+/**
+ * Background event page (Firefox MV3 uses `background.scripts`, not a service
+ * worker). It owns detection, the provider registry, the cache and scan state.
+ *
+ * Why the background and not the popup: a Firefox popup is destroyed the moment
+ * it loses focus. Keeping scan state here means an in-flight scan survives the
+ * popup closing, and reopening the popup re-renders the last result instantly
+ * instead of starting over.
+ */
+
+import { detectFromUrl, rankCandidates, isSupportedSite } from '../core/detect.js';
+import { inferChainFromAddress, normalizeAddress, isNonTokenAddress } from '../utils/validation.js';
+import { registry } from '../services/providerRegistry.js';
+import { createMockProvider } from '../services/providers/mockProvider.js';
+import { runScan } from '../services/marketData.js';
+import { TtlCache } from '../utils/caching.js';
+import { getSettings, getProviderConfig, setLastScan, getLastScan, cacheStore } from '../storage/storage.js';
+
+const ext = globalThis.browser ?? globalThis.chrome;
+
+// PHASE 1: the demo provider is the only one registered. Adding a real source
+// is one register() call - see services/providers/httpProvider.template.js.
+registry.register(createMockProvider());
+
+const cache = new TtlCache(cacheStore);
+
+/** Last completed or in-flight scan, kept alive across popup open/close. */
+let currentScan = null; // { target, snapshot, analysis, status, startedAt, error }
+const ports = new Set();
+
+// --------------------------------------------------------------------------
+// Detection
+// --------------------------------------------------------------------------
+
+const CONTENT_FILES = [
+  'src/content/adapters/base.js',
+  'src/content/adapters/domAdapter.js',
+  'src/content/content.js',
+];
+
+async function getActiveTab() {
+  const tabs = await ext.tabs.query({ active: true, currentWindow: true });
+  return tabs && tabs[0] ? tabs[0] : null;
+}
+
+export async function detectToken() {
+  const tab = await getActiveTab();
+  if (!tab || !tab.url) {
+    return { ok: false, reason: 'no-tab', message: 'No active tab to read.' };
+  }
+
+  // 1. URL adapters first - the most reliable signal available.
+  const fromUrl = detectFromUrl(tab.url);
+  if (fromUrl) {
+    return { ok: true, ...fromUrl, tabUrl: tab.url, hostname: safeHostname(tab.url) };
+  }
+
+  // 2. Fall back to reading the page. activeTab means this only ever happens
+  //    for the tab the user pressed SCAN on.
+  let pageResult = null;
+  try {
+    const injected = await ext.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_FILES });
+    pageResult = injected && injected[0] ? injected[0].result : null;
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'injection-failed',
+      message: restrictedPage(tab.url)
+        ? 'This page cannot be read by extensions. Paste the contract address instead.'
+        : `Unable to read this page: ${String((err && err.message) || err)}`,
+      hostname: safeHostname(tab.url),
+      tabUrl: tab.url,
+    };
+  }
+
+  if (pageResult && pageResult.candidates && pageResult.candidates.length) {
+    const ranked = rankCandidates(pageResult.candidates);
+    if (ranked.length) {
+      const best = ranked[0];
+      const family = inferChainFromAddress(best.address);
+      return {
+        ok: true,
+        address: best.address,
+        chain: family === 'solana' ? 'solana' : 'unknown',
+        addressKind: 'token',
+        site: 'generic',
+        method: 'dom',
+        confidence: ranked.length > 1 && ranked[1].score >= best.score ? 'ambiguous' : 'ranked',
+        alternatives: ranked.slice(1, 4).map((c) => c.address),
+        pageMetrics: pageResult.pageMetrics || {},
+        identityHints: pageResult.identityHints || {},
+        hostname: pageResult.hostname,
+        tabUrl: tab.url,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    reason: 'unidentified',
+    message: 'Unable to automatically identify this token.',
+    supportedSite: isSupportedSite(tab.url),
+    hostname: safeHostname(tab.url),
+    tabUrl: tab.url,
+  };
+}
+
+function safeHostname(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function restrictedPage(url) {
+  return /^(about:|moz-extension:|chrome:|resource:|view-source:|https:\/\/addons\.mozilla\.org)/i.test(url || '');
+}
+
+// --------------------------------------------------------------------------
+// Scanning
+// --------------------------------------------------------------------------
+
+function broadcast(message) {
+  for (const port of ports) {
+    try {
+      port.postMessage(message);
+    } catch {
+      ports.delete(port);
+    }
+  }
+}
+
+export async function startScan(target) {
+  const address = normalizeAddress(target.address);
+  if (!address) return { ok: false, message: 'Invalid contract address.' };
+  if (isNonTokenAddress(address)) return { ok: false, message: 'That address is a system or wrapped-asset account, not a token to research.' };
+
+  const settings = await getSettings();
+  const config = await getProviderConfig();
+  const resolved = { ...target, address };
+
+  currentScan = { target: resolved, snapshot: null, analysis: null, status: 'running', startedAt: Date.now(), error: null };
+  broadcast({ type: 'SCAN_STARTED', target: resolved });
+
+  try {
+    const { snapshot, analysis } = await runScan(resolved, {
+      registry,
+      cache,
+      settings,
+      config,
+      onUpdate: ({ snapshot: snap, analysis: an, stage, done }) => {
+        currentScan = { ...currentScan, snapshot: snap, analysis: an, status: done ? 'complete' : 'running' };
+        broadcast({ type: 'SCAN_UPDATE', stage, done, snapshot: snap, analysis: an, target: resolved });
+      },
+    });
+    currentScan = { ...currentScan, snapshot, analysis, status: 'complete' };
+    await setLastScan({ target: resolved, snapshot, analysis, completedAt: Date.now() });
+    broadcast({ type: 'SCAN_COMPLETE', snapshot, analysis, target: resolved });
+    return { ok: true, snapshot, analysis };
+  } catch (err) {
+    const message = String((err && err.message) || err);
+    currentScan = { ...currentScan, status: 'error', error: message };
+    broadcast({ type: 'SCAN_ERROR', message });
+    return { ok: false, message };
+  }
+}
+
+// --------------------------------------------------------------------------
+// Messaging
+// --------------------------------------------------------------------------
+
+ext.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'scan') return;
+  ports.add(port);
+  port.onDisconnect.addListener(() => ports.delete(port));
+
+  // Re-hydrate a reopened popup immediately.
+  if (currentScan) {
+    port.postMessage({
+      type: currentScan.status === 'running' ? 'SCAN_UPDATE' : 'SCAN_COMPLETE',
+      snapshot: currentScan.snapshot,
+      analysis: currentScan.analysis,
+      target: currentScan.target,
+      done: currentScan.status !== 'running',
+      resumed: true,
+    });
+  }
+});
+
+ext.runtime.onMessage.addListener((message) => {
+  switch (message && message.type) {
+    case 'DETECT':
+      return detectToken();
+    case 'SCAN':
+      return startScan(message.target);
+    case 'GET_STATE':
+      return Promise.resolve({ current: currentScan });
+    case 'GET_LAST_SCAN':
+      return getLastScan();
+    case 'PROVIDERS':
+      return Promise.resolve({
+        providers: registry.list().map((p) => ({ id: p.id, label: p.label, stages: p.stages, requiresKey: p.requiresKey, isMock: Boolean(p.isMock) })),
+      });
+    default:
+      return undefined;
+  }
+});

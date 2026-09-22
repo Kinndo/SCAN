@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "SCAN - Memecoin Research",
+  "version": "0.1.0",
+  "description": "Rapid memecoin research and risk analysis. Compresses on-chain and market signals into a scannable dashboard. Analysis only - never trades, never touches wallets.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "scan@memecoin.research",
+      "strict_min_version": "115.0"
+    }
+  },
+
+  "background": {
+    "scripts": ["src/background/background.js"],
+    "type": "module"
+  },
+
+  "action": {
+    "default_title": "SCAN Coin",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "48": "icons/icon.svg",
+      "96": "icons/icon.svg"
+    }
+  },
+
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+
+  "options_ui": {
+    "page": "src/settings/settings.html",
+    "open_in_tab": true
+  },
+
+  "permissions": ["activeTab", "scripting", "storage"],
+
+  "optional_host_permissions": [
+    "https://api.dexscreener.com/*",
+    "https://api.geckoterminal.com/*",
+    "https://api.mainnet-beta.solana.com/*",
+    "https://api.gopluslabs.io/*"
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}

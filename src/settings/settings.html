@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SCAN Settings</title>
+  <link rel="stylesheet" href="../popup/popup.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body class="settings-body">
+  <div class="settings-wrap">
+    <header class="topbar">
+      <div class="brand">SCAN &middot; SETTINGS</div>
+      <div class="topbar-actions">
+        <button id="btn-save" class="icon-btn" type="button">Save</button>
+        <button id="btn-reset" class="icon-btn" type="button">Reset defaults</button>
+      </div>
+    </header>
+
+    <div id="status" class="save-status" hidden></div>
+
+    <section class="panel">
+      <h2>Risk profile</h2>
+      <p class="hint">Presets fill the thresholds below. Nothing here blocks a scan - thresholds only add "your filter" signals.</p>
+      <div class="profile-row">
+        <button class="profile-btn" data-profile="conservative" type="button">Conservative</button>
+        <button class="profile-btn" data-profile="balanced" type="button">Balanced</button>
+        <button class="profile-btn" data-profile="aggressive" type="button">Aggressive</button>
+        <span id="profile-current" class="hint"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Thresholds</h2>
+      <div class="grid2">
+        <label>Minimum liquidity (USD)<input id="minLiquidityUsd" class="input" type="number" min="0" step="1000" /></label>
+        <label>Minimum market cap (USD)<input id="minMarketCapUsd" class="input" type="number" min="0" step="1000" /></label>
+        <label>Maximum market cap (USD)<input id="maxMarketCapUsd" class="input" type="number" min="0" step="10000" /></label>
+        <label>Max top-10 concentration (%)<input id="maxTop10ConcentrationPct" class="input" type="number" min="0" max="100" step="1" /></label>
+        <label>Minimum token age (minutes)<input id="minTokenAgeMinutes" class="input" type="number" min="0" step="5" /></label>
+        <label>Max signals shown<input id="maxSignalsShown" class="input" type="number" min="1" max="20" step="1" /></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Preferred chains</h2>
+      <div id="chains" class="chain-row"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Opportunity weights</h2>
+      <p class="hint">Relative weights, normalised automatically. A dimension with no data has its weight redistributed across the rest.</p>
+      <div id="opp-weights" class="grid2"></div>
+      <div class="weight-total">Total: <span id="opp-total">0</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Risk factor weights</h2>
+      <p class="hint">Penalty points a fully-triggered factor contributes. Set a weight to 0 to disable that check.</p>
+      <div id="risk-weights" class="grid2"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Data providers</h2>
+      <div id="providers" class="provider-list"></div>
+      <p class="hint">
+        Phase 1 ships with a built-in demo provider only - every figure it produces is placeholder data and is
+        labelled DEMO DATA in the popup. Real providers are added by registering a module in
+        <code>src/services/providers/</code>. API keys belong in this page (stored locally in
+        <code>browser.storage.local</code>), never in the source code.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>Privacy</h2>
+      <p class="hint">
+        All settings, caches and scan results stay on this machine. Nothing is uploaded and there is no account.
+        This extension never requests, stores or reads private keys, seed phrases, wallet passwords or signing
+        credentials, and it cannot execute trades - it has no wallet code at all.
+      </p>
+      <button id="btn-clear" class="icon-btn" type="button">Clear all local data</button>
+    </section>
+  </div>
+  <script type="module" src="settings.js"></script>
+</body>
+</html>
