@@ -169,9 +169,13 @@ async function startScan(target) {
 // Rendering
 // --------------------------------------------------------------------------
 
+// Element ids are written out in full rather than assembled from fragments, so
+// tools/validate-manifest.mjs can prove every lookup resolves against the HTML.
+const VIEWS = { idle: 'view-idle', manual: 'view-manual', result: 'view-result', error: 'view-error' };
+
 function showView(name) {
-  for (const v of ['idle', 'manual', 'result', 'error']) {
-    $(`view-${v}`).hidden = v !== name;
+  for (const [view, id] of Object.entries(VIEWS)) {
+    $(id).hidden = view !== name;
   }
   $('btn-rescan').hidden = name !== 'result';
 }
@@ -217,8 +221,8 @@ function render() {
   setMetric('m-chg', formatPercent(chg, { signed: true }), isMissing(chg) ? '' : chg >= 0 ? 'up' : 'down');
 
   // --- scores ---
-  renderScore('opp', a.opportunity, a.bands.opportunity);
-  renderScore('risk', a.risk, a.bands.risk);
+  renderScore($('opp-score'), $('opp-bar'), $('opp-band'), a.opportunity, a.bands.opportunity);
+  renderScore($('risk-score'), $('risk-bar'), $('risk-band'), a.risk, a.bands.risk);
 
   renderKeySignals(a.keySignals);
   renderAlerts(a);
@@ -238,10 +242,7 @@ function setMetric(id, text, extra = '') {
   node.className = `metric-v${text === 'Unknown' ? ' unknown' : ''}${extra ? ` ${extra}` : ''}`;
 }
 
-function renderScore(prefix, score, band) {
-  const valueNode = $(`${prefix}-score`);
-  const barNode = $(`${prefix}-bar`);
-  const bandNode = $(`${prefix}-band`);
+function renderScore(valueNode, barNode, bandNode, score, band) {
   if (score.insufficientData || !Number.isFinite(score.score)) {
     valueNode.textContent = '--';
     valueNode.className = 'lvl-unknown';

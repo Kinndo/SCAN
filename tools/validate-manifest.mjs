@@ -66,6 +66,38 @@ for (const page of ['src/popup/popup.html', 'src/settings/settings.html']) {
   }
 }
 
+// --- UI wiring: every element the scripts look up must exist ---------------
+// The scoring layer has unit tests; the DOM wiring cannot be unit tested without
+// a browser, so this catches the common failure - a renamed or typo'd id that
+// would throw "null is not an object" at runtime with no other warning.
+for (const [js, html] of [
+  ['src/popup/popup.js', 'src/popup/popup.html'],
+  ['src/settings/settings.js', 'src/settings/settings.html'],
+]) {
+  const script = readFileSync(join(root, js), 'utf8');
+  const markup = readFileSync(join(root, html), 'utf8');
+  const ids = new Set([...markup.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+
+  for (const [, id] of script.matchAll(/\$\('([^']+)'\)/g)) {
+    if (!ids.has(id)) problems.push(`${js} looks up #${id}, which ${html} does not define`);
+  }
+  // An assembled id cannot be checked exactly - `${prefix}-score` matches
+  // "risk-score" even after "opp-score" has been renamed away, so a lookup like
+  // that would hide exactly the break this check exists to catch. Write ids out
+  // in full instead.
+  for (const [, pattern] of script.matchAll(/\$\(`([^`]+)`\)/g)) {
+    problems.push(`${js} builds an element id at runtime (\`${pattern}\`); use a literal id so it can be verified`);
+  }
+  // Ids driven by a constant list, which the patterns above cannot see.
+  const listed = script.match(/const NUMERIC_FIELDS = \[([\s\S]*?)\]/);
+  if (listed) {
+    for (const [, id] of listed[1].matchAll(/'([^']+)'/g)) {
+      if (!ids.has(id)) problems.push(`${js} NUMERIC_FIELDS references #${id}, missing from ${html}`);
+    }
+  }
+}
+notes.push('popup and settings element references resolve');
+
 // --- source files parse ----------------------------------------------------
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
