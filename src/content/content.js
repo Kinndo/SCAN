@@ -24,8 +24,23 @@
     result.candidates = adapter.collectCandidates();
     result.pageMetrics = adapter.extractVisibleMetrics();
     result.identityHints = adapter.extractIdentityHints();
+
+    // A site-specific extractor, where one exists, beats the generic guess.
+    const sites = globalThis.ScanSiteAdapters;
+    const fromSite = sites ? sites.identityFor(location.hostname) : null;
+    if (fromSite) {
+      result.identityHints = {
+        ...result.identityHints,
+        symbolHint: fromSite.symbol,
+        nameHint: fromSite.name ?? result.identityHints.nameHint ?? null,
+        symbolSource: fromSite.source,
+        siteAdapter: fromSite.site,
+      };
+    }
+
     try {
       result.debug = adapter.collectDebug();
+      if (result.debug) result.debug.siteAdapter = fromSite ? fromSite.site : null;
     } catch {
       result.debug = null;
     }

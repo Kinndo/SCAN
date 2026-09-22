@@ -63,6 +63,21 @@ and pool addresses need a provider to resolve them to their base token, which is
 job. Detection sanity-checks that the address family matches the chain, so a wrong pattern
 degrades to "unable to identify" rather than scanning the wrong token.
 
+There are two kinds of site adapter, and they live in different places because they run
+in different worlds:
+
+| Kind | Where | Runs in | Answers |
+| --- | --- | --- | --- |
+| URL adapter | `src/core/detect.js` → `SITES` | background | *which address, which chain* |
+| Identity adapter | `src/content/adapters/siteAdapters.js` → `SITES` | content script | *what is it called* |
+
+An identity adapter must be built from **observed** markup, never from a guess about what
+a site probably renders. Have the user press **copy debug** in the popup on that site and
+paste the report; it contains the title, og:title and the header lines. Record that
+evidence in a comment on the adapter, as the Axiom entry does. The reason this rule
+exists: three successive generic heuristics reported the wrong name on Axiom ("Pep Doge",
+"Axiom", "139K") before a report showed the chart legend was not even in the DOM.
+
 Content-script files cannot be ES modules, so `src/content/adapters/base.js` repeats the
 address regexes from `src/utils/validation.js`. `tests/adapters.test.js` fails if the two
 copies drift.

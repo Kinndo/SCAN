@@ -35,6 +35,7 @@ const ports = new Set();
 const CONTENT_FILES = [
   'src/content/adapters/base.js',
   'src/content/adapters/domAdapter.js',
+  'src/content/adapters/siteAdapters.js',
   'src/content/content.js',
 ];
 
